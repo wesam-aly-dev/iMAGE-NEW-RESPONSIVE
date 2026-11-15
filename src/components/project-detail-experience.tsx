@@ -31,66 +31,17 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
-  // Visual tour state
-  const visualTours = project.visualTours || [];
-  const hasHtmlTours = visualTours.length > 0;
-  const hasAnyTour = hasHtmlTours || Boolean(project.videoTourUrl);
-
-  const [activeTourIndex, setActiveTourIndex] = useState(0);
-  const [visualTourModalOpen, setVisualTourModalOpen] = useState(false);
-  const [tourIframeLoading, setTourIframeLoading] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const tourOverlayRef = useRef<HTMLDivElement>(null);
-  const tourTriggerBtnRef = useRef<HTMLButtonElement>(null);
-
   // Keyboard accessibility for modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (visualTourModalOpen) {
-          closeVisualTour();
-        } else {
-          setMasterPlanOpen(false);
-          setActiveLightboxIndex(null);
-        }
+        setMasterPlanOpen(false);
+        setActiveLightboxIndex(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [visualTourModalOpen]);
-
-  // Fullscreen change listener
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
-
-  const openVisualTour = () => {
-    setTourIframeLoading(true);
-    setVisualTourModalOpen(true);
-    document.body.style.overflow = "hidden";
-  };
-
-  const closeVisualTour = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => undefined);
-    }
-    setVisualTourModalOpen(false);
-    document.body.style.overflow = "";
-    tourTriggerBtnRef.current?.focus();
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      tourOverlayRef.current?.requestFullscreen?.().catch(() => undefined);
-    } else {
-      document.exitFullscreen?.().catch(() => undefined);
-    }
-  };
 
   const handleOpenProjectEnquiry = (unitName?: string) => {
     openEnquiry({
@@ -154,8 +105,6 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
     INTERIOR: { en: "Interiors", ar: "التصميم الداخلي" },
     MASTER_PLAN: { en: "Master Plan", ar: "المخطط العام" },
   };
-
-  const activeTour: ProjectVisualTourItem | undefined = visualTours[activeTourIndex];
 
   return (
     <>
@@ -232,20 +181,23 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
                   </svg>
                 </button>
 
-                {hasAnyTour && (
-                  <button
-                    ref={tourTriggerBtnRef}
-                    type="button"
+                {project.virtualTour?.enabled && project.virtualTour.url && (
+                  <a
+                    href={project.virtualTour.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-project-tour"
-                    onClick={openVisualTour}
-                    aria-label={ar ? "جولة افتراضية" : "Visual Tour"}
+                    aria-label={`${project.virtualTour.label} (${ar ? "يفتح في علامة تبويب جديدة" : "opens in a new tab"})`}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="12" cy="12" r="10" />
                       <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
                     </svg>
-                    <span>{ar ? "جولة افتراضية" : "Visual Tour"}</span>
-                  </button>
+                    <span>{project.virtualTour.label}</span>
+                    <span className="sr-only" style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>
+                      {ar ? "(يفتح في نافذة جديدة)" : "(opens in new tab)"}
+                    </span>
+                  </a>
                 )}
 
                 <button
@@ -986,212 +938,8 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
       )}
 
       {/* =========================================================
-          Visual Tour Viewer Modal (Priority 3, 4, 5, 7)
-          Secure, Isolated, Cookieless Sandboxed Iframe Overlay
+          Footer
       ========================================================= */}
-      {visualTourModalOpen && (
-        <div
-          ref={tourOverlayRef}
-          className="visual-tour-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={ar ? "جولة افتراضية تفاعلية" : "Interactive Visual Tour"}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100000,
-            background: "rgba(10, 15, 12, 0.96)",
-            backdropFilter: "blur(12px)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {/* Viewer Top Bar */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "14px clamp(16px, 3vw, 32px)",
-              background: "rgba(20, 30, 24, 0.85)",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-              color: "#ffffff",
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "50%",
-                  background: "#4ade80",
-                  boxShadow: "0 0 8px #4ade80",
-                }}
-                aria-hidden="true"
-              />
-              <strong style={{ fontSize: "16px", letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {project.name}
-              </strong>
-              {activeTour && (
-                <span style={{ fontSize: "13px", opacity: 0.7, borderInlineStart: "1px solid rgba(255,255,255,0.2)", paddingInlineStart: "10px" }}>
-                  {activeTour.title}
-                </span>
-              )}
-            </div>
-
-            {/* Tour selector tabs if multiple exist */}
-            {visualTours.length > 1 && (
-              <div style={{ display: "flex", gap: "6px", alignItems: "center", marginInline: "12px" }}>
-                {visualTours.map((t, idx) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => {
-                      setTourIframeLoading(true);
-                      setActiveTourIndex(idx);
-                    }}
-                    style={{
-                      background: activeTourIndex === idx ? "var(--forest)" : "rgba(255,255,255,0.1)",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "4px",
-                      padding: "4px 10px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      fontWeight: activeTourIndex === idx ? 600 : 400,
-                    }}
-                  >
-                    {t.title}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Actions: Fullscreen & Close */}
-            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                aria-label={isFullscreen ? (ar ? "إنهاء وضع ملء الشاشة" : "Exit Fullscreen") : (ar ? "ملء الشاشة" : "Fullscreen")}
-                style={{
-                  background: "rgba(255, 255, 255, 0.12)",
-                  color: "#ffffff",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  borderRadius: "6px",
-                  padding: "6px 12px",
-                  fontSize: "12px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                </svg>
-                <span>{isFullscreen ? (ar ? "تصغير" : "Exit") : (ar ? "ملء الشاشة" : "Fullscreen")}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={closeVisualTour}
-                aria-label={ar ? "إغلاق الجولة" : "Close Tour"}
-                style={{
-                  background: "#ffffff",
-                  color: "#000000",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "6px 14px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {ar ? "إغلاق ✕" : "Close ✕"}
-              </button>
-            </div>
-          </div>
-
-          {/* Viewer Stage */}
-          <div
-            style={{
-              flex: 1,
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              background: "#050706",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            {/* Loading state indicator */}
-            {tourIframeLoading && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  color: "#ffffff",
-                  background: "#080c09",
-                  zIndex: 2,
-                  gap: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    border: "3px solid rgba(255,255,255,0.2)",
-                    borderTopColor: "var(--cream)",
-                    borderRadius: "50%",
-                    animation: "spin 0.8s linear infinite",
-                  }}
-                  aria-hidden="true"
-                />
-                <span style={{ fontSize: "14px", opacity: 0.85 }}>
-                  {ar ? "جارٍ تجهيز الجولة الافتراضية..." : "Initializing interactive visual tour..."}
-                </span>
-              </div>
-            )}
-
-            {/* If HTML tour exists: isolated sandboxed iframe */}
-            {hasHtmlTours && activeTour ? (
-              <iframe
-                key={activeTour.id}
-                src={`${activeTour.extractedPrefix}/${activeTour.entryFilePath}`}
-                title={`${project.name} — ${activeTour.title}`}
-                sandbox="allow-scripts allow-same-origin"
-                allow="accelerometer; gyroscope; fullscreen"
-                onLoad={() => setTourIframeLoading(false)}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  border: "none",
-                  display: "block",
-                }}
-              />
-            ) : project.videoTourUrl ? (
-              /* Fallback: Video tour */
-              <video
-                src={project.videoTourUrl}
-                controls
-                autoPlay
-                playsInline
-                onLoadedData={() => setTourIframeLoading(false)}
-                style={{ width: "100%", maxHeight: "90vh", borderRadius: "8px" }}
-              />
-            ) : null}
-          </div>
-        </div>
-      )}
-
       <Footer copy={copy} page="projects" />
     </>
   );

@@ -1,6 +1,18 @@
 "use server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import {
+  createNotificationJob,
+  dispatchNotificationJob,
+  getResolvedNotificationSettings,
+} from "@/lib/notifications/email-service";
+import type { FormType } from "@/lib/notifications/types";
+
+function generateReferenceNumber(prefix: "INQ" | "APP"): string {
+  const year = new Date().getFullYear();
+  const rand = Math.floor(10000 + Math.random() * 90000);
+  return `${prefix}-${year}-${rand}`;
+}
 
 export type ContactState = {
   status: "idle" | "success" | "error";
@@ -148,25 +160,112 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
   if(marketingChecked)metaParts.push("Marketing: Opted-In");
   const notes=metaParts.length?metaParts.join(" | "):null;
 
-  await prisma.contactSubmission.create({
-    data:{
-      name:parsed.data.name,
-      email:parsed.data.email || "",
-      phone:`${callingCode} ${parsed.data.phone}`,
-      countryCode:parsed.data.countryCode,
-      projectId:project?project.id:null,
+  const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim() || undefined;
+
+  // Check idempotency if key was provided
+  if (idempotencyKey) {
+    const existing = await prisma.contactSubmission.findUnique({
+      where: { idempotencyKey },
+    });
+    if (existing) {
+      return {
+        status: "success",
+        message: ar
+          ? `شكراً لك، تم استلام استفسارك مسبقاً برقم مرجعي (${existing.referenceNumber || existing.id}). سيتواصل معك فريقنا قريباً.`
+          : `Thank you, your enquiry was already received (Ref: ${existing.referenceNumber || existing.id}). Our team will be in touch shortly.`,
+      };
+    }
+  }
+
+  // Determine FormType
+  let formType: FormType = "GENERAL_CONTACT";
+  if (parsed.data.enquiryType === "callback" || values.formVariant === "callback") {
+    formType = "CALLBACK";
+  } else if (parsed.data.enquiryType === "unit" || unitVal) {
+    formType = "UNIT_INQUIRY";
+  } else if (parsed.data.enquiryType === "register_interest") {
+    formType = "REGISTER_INTEREST";
+  } else if (project) {
+    formType = "PROJECT_INQUIRY";
+  }
+
+  const referenceNumber = generateReferenceNumber("INQ");
+  const notificationSettings = await getResolvedNotificationSettings();
+
+  const submission = await prisma.$transaction(async (tx) => {
+    const created = await tx.contactSubmission.create({
+      data: {
+        referenceNumber,
+        name: parsed.data.name,
+        email: parsed.data.email || "",
+        phone: `${callingCode} ${parsed.data.phone}`,
+        countryCode: parsed.data.countryCode,
+        projectId: project ? project.id : null,
+        projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
+        unitType: unitVal || null,
+        formType,
+        formVariant: values.formVariant || null,
+        sourcePage: values.sourcePage || null,
+        sourceCta: values.sourceCta || null,
+        consentAccepted: consentChecked,
+        marketingConsent: marketingChecked,
+        consentVersion: "v1",
+        idempotencyKey: idempotencyKey || null,
+        status: "NEW",
+        subject,
+        notes,
+        message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
+        locale: parsed.data.locale,
+        notificationStatus: "PENDING",
+      },
+    });
+
+    const jobPayload = {
+      referenceNumber,
+      formType,
+      formVariant: values.formVariant || null,
+      name: parsed.data.name,
+      email: parsed.data.email || "",
+      phone: parsed.data.phone,
+      countryCode: callingCode,
       subject,
-      notes,
       message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
+      projectId: project ? project.id : null,
+      projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
+      unitType: unitVal || null,
+      sourcePage: values.sourcePage || null,
+      sourceCta: values.sourceCta || null,
       locale: parsed.data.locale,
-    },
+      consentAccepted: consentChecked,
+      marketingConsent: marketingChecked,
+      consentVersion: "v1",
+      createdAt: created.createdAt.toISOString(),
+    };
+
+    const job = await createNotificationJob(tx, {
+      jobType: "LEAD_INQUIRY",
+      targetId: created.id,
+      recipientEmail: notificationSettings.recipientEmail,
+      senderEmail: notificationSettings.senderEmail,
+      subject: `New Inquiry — ${project ? (ar ? project.nameAr : project.nameEn) : "General Inquiry"} — ${referenceNumber}`,
+      payload: jobPayload,
+    });
+
+    return { created, jobId: job.id };
   });
 
-  return{
-    status:"success",
-    message:ar
-      ? `شكراً لك${project ? `، تم استلام استفسارك بخصوص ${project.nameAr} بنجاح` : "، تم استلام استفسارك بنجاح"}. سيتواصل معك فريقنا المختص قريباً.`
-      : `Thank you${project ? `, your enquiry regarding ${project.nameEn} has been received` : ", your enquiry has been received"}. Our specialized team will be in touch shortly.`
+  // Await notification dispatch before returning, while ensuring submission persistence is completely independent
+  try {
+    await dispatchNotificationJob(submission.jobId);
+  } catch (err) {
+    console.error("Notification dispatch error:", err);
+  }
+
+  return {
+    status: "success",
+    message: ar
+      ? `شكراً لك${project ? `، تم استلام استفسارك بخصوص ${project.nameAr} بنجاح` : "، تم استلام استفسارك بنجاح"}. رقم المرجع: ${referenceNumber}. سيتواصل معك فريقنا المختص قريباً.`
+      : `Thank you${project ? `, your enquiry regarding ${project.nameEn} has been received` : ", your enquiry has been received"}. Reference: ${referenceNumber}. Our specialized team will be in touch shortly.`,
   };
 }
 
@@ -246,8 +345,45 @@ export async function submitCareerApplication(
     const buffer = Buffer.from(await cvFile!.arrayBuffer());
     await fs.writeFile(storagePath, buffer);
 
-    await prisma.careerApplication.create({
-      data: {
+    const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim() || undefined;
+    if (idempotencyKey) {
+      const existing = await prisma.careerApplication.findUnique({
+        where: { idempotencyKey },
+      });
+      if (existing) {
+        return {
+          status: "success",
+          message: ar
+            ? `تم استلام طلبك مسبقاً برقم مرجعي (${existing.referenceNumber || existing.id}).`
+            : `Your application was already received (Ref: ${existing.referenceNumber || existing.id}).`,
+        };
+      }
+    }
+
+    const referenceNumber = generateReferenceNumber("APP");
+    const notificationSettings = await getResolvedNotificationSettings();
+    const careersRecipient = notificationSettings.careersRecipientEmail || notificationSettings.recipientEmail;
+
+    const application = await prisma.$transaction(async (tx) => {
+      const created = await tx.careerApplication.create({
+        data: {
+          referenceNumber,
+          jobId: jobId || null,
+          jobTitle,
+          fullName,
+          email,
+          phone,
+          cvUrl: storagePath,
+          cvFilename: originalName,
+          notes: notes || null,
+          status: "NEW",
+          idempotencyKey: idempotencyKey || null,
+          notificationStatus: "PENDING",
+        },
+      });
+
+      const jobPayload = {
+        referenceNumber,
         jobId: jobId || null,
         jobTitle,
         fullName,
@@ -256,15 +392,32 @@ export async function submitCareerApplication(
         cvUrl: storagePath,
         cvFilename: originalName,
         notes: notes || null,
-        status: "NEW",
-      },
+        createdAt: created.createdAt.toISOString(),
+      };
+
+      const job = await createNotificationJob(tx, {
+        jobType: "CAREER_APPLICATION",
+        targetId: created.id,
+        recipientEmail: careersRecipient,
+        senderEmail: notificationSettings.senderEmail,
+        subject: `New Application — ${jobTitle} — ${referenceNumber}`,
+        payload: jobPayload,
+      });
+
+      return { created, jobId: job.id };
     });
+
+    try {
+      await dispatchNotificationJob(application.jobId);
+    } catch (err) {
+      console.error("Career notification dispatch error:", err);
+    }
 
     return {
       status: "success",
       message: ar
-        ? `تم استلام طلب التقديم لوظيفة "${jobTitle}" بنجاح. سيقوم فريق الموارد البشرية بمراجعة سيرتك الذاتية والتواصل معك.`
-        : `Your application for "${jobTitle}" has been received successfully. Our People & Culture team will review your qualifications.`,
+        ? `تم استلام طلب التقديم لوظيفة "${jobTitle}" بنجاح (رقم المرجع: ${referenceNumber}). سيقوم فريق الموارد البشرية بمراجعة سيرتك الذاتية والتواصل معك.`
+        : `Your application for "${jobTitle}" has been received successfully (Ref: ${referenceNumber}). Our People & Culture team will review your qualifications.`,
     };
   } catch (error) {
     console.error("Career application submission error:", error);

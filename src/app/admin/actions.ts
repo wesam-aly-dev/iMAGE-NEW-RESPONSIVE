@@ -16,7 +16,8 @@ import { validateTypographyValue, TYPOGRAPHY_ROLES, type TypographyRole } from "
 const str=(f:FormData,k:string)=>String(f.get(k)??"").trim();
 const bool=(f:FormData,k:string)=>f.get(k)==="on";
 const rgb=(f:FormData,k:string)=>{const parts=str(f,k).split(",").map(value=>Number(value.trim()));return parts.length===3&&parts.every(value=>Number.isInteger(value)&&value>=0&&value<=255)?parts.join(", "):null};
-async function saveFontSizes(f: FormData) {
+async function saveFontSizes(f: FormData, tx?: any) {
+  const db = tx || prisma;
   const settingKeys = new Set<string>();
   for (const key of f.keys()) {
     if (key.startsWith("fontSize_")) settingKeys.add(key.slice(9));
@@ -34,21 +35,21 @@ async function saveFontSizes(f: FormData) {
     const validDesktop = desktopNum !== null && Number.isInteger(desktopNum) && desktopNum >= 12 && desktopNum <= 200 ? desktopNum : null;
     const validMobile = mobileNum !== null && Number.isInteger(mobileNum) && mobileNum >= 12 && mobileNum <= 200 ? mobileNum : null;
     if (!validDesktop && !validMobile) {
-      await prisma.typographySetting.deleteMany({ where: { key: settingKey } });
+      await db.typographySetting.deleteMany({ where: { key: settingKey } });
       continue;
     }
-    await prisma.typographySetting.upsert({
+    await db.typographySetting.upsert({
       where: { key: settingKey },
       create: {
         key: settingKey,
-        fontSize: validDesktop ?? undefined,
-        fontSizeDesktop: validDesktop ?? undefined,
-        fontSizeMobile: validMobile ?? undefined,
+        fontSize: validDesktop ?? 16,
+        fontSizeDesktop: validDesktop,
+        fontSizeMobile: validMobile,
       },
       update: {
-        fontSize: validDesktop ?? undefined,
-        fontSizeDesktop: validDesktop ?? undefined,
-        fontSizeMobile: validMobile ?? undefined,
+        fontSize: validDesktop ?? 16,
+        fontSizeDesktop: validDesktop,
+        fontSizeMobile: validMobile,
       },
     });
   }
@@ -364,68 +365,318 @@ export async function savePageSections(_:ActionState,f:FormData):Promise<ActionS
 }
 
 export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionState>{
-  await requireAdmin(); const required=["heroEyebrowEn","heroEyebrowAr","heroTitleEn","heroTitleAr","heroNoteEn","heroNoteAr","heroMediaUrl","lifestyleTitleEn","lifestyleTitleAr","closingTitleEn","closingTitleAr"];
-  if(required.some(k=>!str(f,k)))return {error:"Complete all required English and Arabic fields."};
-  const colorKeys=["openingBackgroundRgb","heroBackgroundRgb","projectsBackgroundRgb","aboutBackgroundRgb","lifestyleBackgroundRgb","statsBackgroundRgb","journalBackgroundRgb","closingBackgroundRgb","footerBackgroundRgb"] as const;
-  const colorEntries=colorKeys.map(key=>[key,rgb(f,key)] as const);
-  if(colorEntries.some(([,value])=>value===null))return {error:"Enter every background as three RGB numbers from 0 to 255, for example 255, 255, 255."};
-  const colors=Object.fromEntries(colorEntries) as Record<(typeof colorKeys)[number],string>;
-  const order=str(f,"sectionOrder").split(",").map(x=>x.trim()).filter(x=>["projects","lifestyle","stats","journal","closing"].includes(x));
-  if(!sectionOrderSchema.safeParse(order).success)return {error:"Section order must contain each supported section exactly once."};
-  await prisma.homepage.update({where:{id:"homepage"},data:colors});
-  await prisma.homepage.update({where:{id:"homepage"},data:{heroEnabled:bool(f,"heroEnabled"),heroEyebrowEn:str(f,"heroEyebrowEn"),heroEyebrowAr:str(f,"heroEyebrowAr"),heroTitleEn:str(f,"heroTitleEn"),heroTitleAr:str(f,"heroTitleAr"),heroNoteEn:str(f,"heroNoteEn"),heroNoteAr:str(f,"heroNoteAr"),heroDiscoverEn:str(f,"heroDiscoverEn"),heroDiscoverAr:str(f,"heroDiscoverAr"),heroMediaUrl:str(f,"heroMediaUrl"),heroMediaAltEn:str(f,"heroMediaAltEn"),heroMediaAltAr:str(f,"heroMediaAltAr"),projectsEnabled:bool(f,"projectsEnabled"),projectsHeadingEn:str(f,"projectsHeadingEn"),projectsHeadingAr:str(f,"projectsHeadingAr"),projectsDescriptionEn:str(f,"projectsDescriptionEn")||null,projectsDescriptionAr:str(f,"projectsDescriptionAr")||null,projectsExploreEn:str(f,"projectsExploreEn"),projectsExploreAr:str(f,"projectsExploreAr"),projectsEnquireEn:str(f,"projectsEnquireEn")||"Enquire",projectsEnquireAr:str(f,"projectsEnquireAr")||"استفسر الآن",projectsViewAllEn:str(f,"projectsViewAllEn")||"View All Projects",projectsViewAllAr:str(f,"projectsViewAllAr")||"جميع المشاريع",projectsSpacing:str(f,"projectsSpacing")||"standard",projectsTheme:str(f,"projectsTheme")||"light",projectsImagePosition:str(f,"projectsImagePosition")||"start",projectsLocationTagsEnabled:bool(f,"projectsLocationTagsEnabled"),projectsAllLabelEn:str(f,"projectsAllLabelEn")||"All Projects",projectsAllLabelAr:str(f,"projectsAllLabelAr")||"كافة المشاريع",projectsShowTagCounts:bool(f,"projectsShowTagCounts"),projectsLocationOrder:str(f,"projectsLocationOrder")||"auto",projectsVisibleLocations:(()=>{const visible=f.getAll("projectsVisibleLocation").map(String);return visible.length>0?JSON.stringify(visible):null;})(),lifestyleEnabled:bool(f,"lifestyleEnabled"),lifestyleEyebrowEn:str(f,"lifestyleEyebrowEn"),lifestyleEyebrowAr:str(f,"lifestyleEyebrowAr"),lifestyleTitleEn:str(f,"lifestyleTitleEn"),lifestyleTitleAr:str(f,"lifestyleTitleAr"),lifestyleMediaUrl:str(f,"lifestyleMediaUrl"),lifestyleMediaAltEn:str(f,"lifestyleMediaAltEn"),lifestyleMediaAltAr:str(f,"lifestyleMediaAltAr"),lifestyleCtaLabelEn:str(f,"lifestyleCtaLabelEn")||"Discover Our Story",lifestyleCtaLabelAr:str(f,"lifestyleCtaLabelAr")||"اكتشف قصتنا",lifestyleCtaUrl:str(f,"lifestyleCtaUrl")||"/about",statsEnabled:bool(f,"statsEnabled"),statsLabelEn:str(f,"statsLabelEn")||null,statsLabelAr:str(f,"statsLabelAr")||null,statsHeadingEn:str(f,"statsHeadingEn")||"Stories, ideas, and updates.",statsHeadingAr:str(f,"statsHeadingAr")||"قصص وأفكار ومستجدات",statsDescriptionEn:str(f,"statsDescriptionEn")||null,statsDescriptionAr:str(f,"statsDescriptionAr")||null,statsImageUrl:str(f,"statsImageUrl")||null,statsImageAltEn:str(f,"statsImageAltEn")||"Image Developments architecture",statsImageAltAr:str(f,"statsImageAltAr")||"العمارة المعاصرة في إيمدج للتطوير العقاري",statsImageFocalPoint:str(f,"statsImageFocalPoint")||"center",statsCtaLabelEn:str(f,"statsCtaLabelEn")||"View All Articles",statsCtaLabelAr:str(f,"statsCtaLabelAr")||"عرض جميع المقالات",statsCtaUrl:str(f,"statsCtaUrl")||"/journal",statsJournalMode:str(f,"statsJournalMode")||"AUTO",statsJournalCategory:str(f,"statsJournalCategory")||"ALL",statsJournalCount:parseInt(str(f,"statsJournalCount")||"3",10)||3,statsJournalArticleIds:str(f,"statsJournalArticleIds")||"[]",journalEnabled:bool(f,"journalEnabled"),journalEyebrowEn:str(f,"journalEyebrowEn"),journalEyebrowAr:str(f,"journalEyebrowAr"),journalTitleEn:str(f,"journalTitleEn"),journalTitleAr:str(f,"journalTitleAr"),closingEnabled:bool(f,"closingEnabled"),closingEyebrowEn:str(f,"closingEyebrowEn"),closingEyebrowAr:str(f,"closingEyebrowAr"),closingTitleEn:str(f,"closingTitleEn"),closingTitleAr:str(f,"closingTitleAr"),closingDescriptionEn:str(f,"closingDescriptionEn")||null,closingDescriptionAr:str(f,"closingDescriptionAr")||null,closingFormHeadingEn:str(f,"closingFormHeadingEn")||null,closingFormHeadingAr:str(f,"closingFormHeadingAr")||null,closingSubmitLabelEn:str(f,"closingSubmitLabelEn")||null,closingSubmitLabelAr:str(f,"closingSubmitLabelAr")||null,closingSuccessMessageEn:str(f,"closingSuccessMessageEn")||null,closingSuccessMessageAr:str(f,"closingSuccessMessageAr")||null,closingCtaEn:str(f,"closingCtaEn"),closingCtaAr:str(f,"closingCtaAr"),closingCtaUrl:str(f,"closingCtaUrl"),sectionOrder:JSON.stringify(order)}});
-  await prisma.homepage.update({where:{id:"homepage"},data:{openingEnabled:bool(f,"openingEnabled"),openingHeadlineEn:str(f,"openingHeadlineEn"),openingHeadlineAr:str(f,"openingHeadlineAr"),openingVideoDesktopUrl:str(f,"openingVideoDesktopUrl")||null,openingVideoMobileUrl:str(f,"openingVideoMobileUrl")||null,openingPosterUrl:str(f,"openingPosterUrl")||null,heroVideoDesktopUrl:str(f,"heroVideoDesktopUrl")||null,heroVideoMobileUrl:str(f,"heroVideoMobileUrl")||null,heroMobileMediaUrl:str(f,"heroMobileMediaUrl")||null,heroPosterUrl:str(f,"heroPosterUrl")||null}});
-  for(const id of f.getAll("statId").map(String)){
-    const isVisible = f.has(`statVisible_${id}`) ? bool(f, `statVisible_${id}`) : true;
-    const order = parseInt(str(f, `statOrder_${id}`) || "0", 10);
-    await prisma.stat.update({
-      where: { id },
-      data: {
-        valueEn: str(f, `statValueEn_${id}`),
-        valueAr: str(f, `statValueAr_${id}`),
-        unitEn: str(f, `statUnitEn_${id}`) || null,
-        unitAr: str(f, `statUnitAr_${id}`) || null,
-        labelEn: str(f, `statLabelEn_${id}`),
-        labelAr: str(f, `statLabelAr_${id}`),
-        visible: isVisible,
-        sortOrder: isNaN(order) ? 0 : order,
-      },
-    });
+  await requireAdmin();
+
+  // Validate required fields with specific, section-aware error messages
+  const requiredFields: Array<{ key: string; label: string; section: string }> = [
+    { key: "heroEyebrowEn", label: "Hero Eyebrow (English)", section: "Hero" },
+    { key: "heroEyebrowAr", label: "Hero Eyebrow (Arabic)", section: "Hero" },
+    { key: "heroTitleEn", label: "Hero Title (English)", section: "Hero" },
+    { key: "heroTitleAr", label: "Hero Title (Arabic)", section: "Hero" },
+    { key: "heroNoteEn", label: "Hero Supporting Text (English)", section: "Hero" },
+    { key: "heroNoteAr", label: "Hero Supporting Text (Arabic)", section: "Hero" },
+    { key: "heroMediaUrl", label: "Hero Desktop Image", section: "Hero" },
+    { key: "lifestyleTitleEn", label: "Living Narrative Heading (English)", section: "About / Our Story" },
+    { key: "lifestyleTitleAr", label: "Living Narrative Heading (Arabic)", section: "About / Our Story" },
+    { key: "closingTitleEn", label: "Closing Heading (English)", section: "Closing" },
+    { key: "closingTitleAr", label: "Closing Heading (Arabic)", section: "Closing" },
+  ];
+  for (const item of requiredFields) {
+    if (!str(f, item.key)) {
+      return { error: `${item.section}: Please complete ${item.label}.` };
+    }
   }
-  const managedProjectIds = f.getAll("managedProjectId").map(String);
-  for (const pid of managedProjectIds) {
-    const isFeatured = bool(f, `projectFeatured_${pid}`);
-    const orderVal = parseInt(str(f, `projectOrder_${pid}`) || "0", 10);
-    await prisma.project.update({
-      where: { id: pid },
-      data: {
-        featured: isFeatured,
-        featuredOrder: isNaN(orderVal) ? 0 : orderVal,
-      },
-    });
+
+  // Validate background RGB colors
+  const colorKeys = [
+    "openingBackgroundRgb",
+    "heroBackgroundRgb",
+    "projectsBackgroundRgb",
+    "aboutBackgroundRgb",
+    "lifestyleBackgroundRgb",
+    "statsBackgroundRgb",
+    "journalBackgroundRgb",
+    "closingBackgroundRgb",
+    "footerBackgroundRgb",
+  ] as const;
+  const colorEntries: Array<[typeof colorKeys[number], string]> = [];
+  for (const key of colorKeys) {
+    if (f.has(key)) {
+      const parsedRgb = rgb(f, key);
+      if (parsedRgb === null) {
+        return { error: `Background Colors: Enter ${key} as three numbers from 0 to 255, for example 255, 255, 255.` };
+      }
+      colorEntries.push([key, parsedRgb]);
+    }
   }
-  const availableArticleIds = f.getAll("availableArticleId").map(String);
-  if (availableArticleIds.length > 0) {
-    const selectedArticlesWithOrder = availableArticleIds
-      .filter(id => bool(f, `manualArticleSelect_${id}`))
-      .map(id => ({
-        id,
-        order: parseInt(str(f, `manualArticleOrder_${id}`) || "99", 10),
-      }))
-      .sort((a, b) => a.order - b.order);
-    
-    const manualIds = selectedArticlesWithOrder.map(item => item.id);
-    await prisma.homepage.update({
-      where: { id: "homepage" },
-      data: { statsJournalArticleIds: JSON.stringify(manualIds) },
-    });
+  const colors = Object.fromEntries(colorEntries) as Record<(typeof colorKeys)[number], string>;
+
+  // Validate section order
+  const rawOrder = str(f, "sectionOrder");
+  const order = rawOrder
+    .split(",")
+    .map(x => x.trim().toLowerCase())
+    .filter(x => ["projects", "lifestyle", "stats", "journal", "closing"].includes(x));
+  if (!sectionOrderSchema.safeParse(order).success) {
+    return { error: "Section Order: Must contain each supported section (projects, lifestyle, stats, journal, closing) exactly once." };
   }
-  await saveFontSizes(f);
-  revalidatePath("/en");
-  revalidatePath("/ar");
-  revalidatePath("/admin/homepage");
-  revalidatePath("/", "layout");
-  return {success:"Homepage saved."};
+
+  // Validate Living Story Section CTA
+  const lifestyleCtaEnabled = f.has("lifestyleCtaEnabled")
+    ? (f.get("lifestyleCtaEnabled") === "on" || f.get("lifestyleCtaEnabled") === "true")
+    : (f.has("hasLifestyleCtaConfig") ? false : undefined);
+  const lifestyleCtaExternal = f.has("lifestyleCtaExternal")
+    ? (f.get("lifestyleCtaExternal") === "on" || f.get("lifestyleCtaExternal") === "true")
+    : undefined;
+  const lifestyleCtaLabelEn = f.has("lifestyleCtaLabelEn") ? (str(f, "lifestyleCtaLabelEn") || "").trim() : undefined;
+  const lifestyleCtaLabelAr = f.has("lifestyleCtaLabelAr") ? (str(f, "lifestyleCtaLabelAr") || "").trim() : undefined;
+  const lifestyleCtaUrl = f.has("lifestyleCtaUrl") ? (str(f, "lifestyleCtaUrl") || "").trim() : undefined;
+
+  if (lifestyleCtaEnabled ?? true) {
+    if (lifestyleCtaLabelEn !== undefined && !lifestyleCtaLabelEn) {
+      return { error: "About / Our Story: Enter the section CTA button label in both English and Arabic when the CTA is enabled." };
+    }
+    if (lifestyleCtaLabelAr !== undefined && !lifestyleCtaLabelAr) {
+      return { error: "About / Our Story: Enter the section CTA button label in both English and Arabic when the CTA is enabled." };
+    }
+    if (lifestyleCtaUrl !== undefined && !lifestyleCtaUrl) {
+      return { error: "About / Our Story: Enter a valid destination URL for the section CTA button." };
+    }
+    if (lifestyleCtaExternal) {
+      if (lifestyleCtaUrl && !/^https?:\/\//i.test(lifestyleCtaUrl)) {
+        return { error: "About / Our Story: External destination URLs must begin with http:// or https://" };
+      }
+    } else {
+      if (lifestyleCtaUrl && /^(?:javascript:|data:|file:)/i.test(lifestyleCtaUrl)) {
+        return { error: "About / Our Story: Unsafe destination URL scheme." };
+      }
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+
+      const homepageUpdate: any = {
+        ...colors,
+        openingEnabled: bool(f, "openingEnabled"),
+        openingHeadlineEn: str(f, "openingHeadlineEn") || existing.openingHeadlineEn,
+        openingHeadlineAr: str(f, "openingHeadlineAr") || existing.openingHeadlineAr,
+        openingVideoDesktopUrl: str(f, "openingVideoDesktopUrl") || null,
+        openingVideoMobileUrl: str(f, "openingVideoMobileUrl") || null,
+        openingPosterUrl: str(f, "openingPosterUrl") || null,
+
+        heroEnabled: bool(f, "heroEnabled"),
+        heroEyebrowEn: str(f, "heroEyebrowEn"),
+        heroEyebrowAr: str(f, "heroEyebrowAr"),
+        heroTitleEn: str(f, "heroTitleEn"),
+        heroTitleAr: str(f, "heroTitleAr"),
+        heroNoteEn: str(f, "heroNoteEn"),
+        heroNoteAr: str(f, "heroNoteAr"),
+        heroDiscoverEn: str(f, "heroDiscoverEn") || existing.heroDiscoverEn,
+        heroDiscoverAr: str(f, "heroDiscoverAr") || existing.heroDiscoverAr,
+        heroMediaUrl: str(f, "heroMediaUrl"),
+        heroMobileMediaUrl: str(f, "heroMobileMediaUrl") || null,
+        heroVideoDesktopUrl: str(f, "heroVideoDesktopUrl") || null,
+        heroVideoMobileUrl: str(f, "heroVideoMobileUrl") || null,
+        heroPosterUrl: str(f, "heroPosterUrl") || null,
+        heroMediaAltEn: str(f, "heroMediaAltEn") || existing.heroMediaAltEn,
+        heroMediaAltAr: str(f, "heroMediaAltAr") || existing.heroMediaAltAr,
+
+        projectsEnabled: bool(f, "projectsEnabled"),
+        projectsHeadingEn: str(f, "projectsHeadingEn") || existing.projectsHeadingEn,
+        projectsHeadingAr: str(f, "projectsHeadingAr") || existing.projectsHeadingAr,
+        projectsDescriptionEn: str(f, "projectsDescriptionEn") || null,
+        projectsDescriptionAr: str(f, "projectsDescriptionAr") || null,
+        projectsExploreEn: str(f, "projectsExploreEn") || existing.projectsExploreEn,
+        projectsExploreAr: str(f, "projectsExploreAr") || existing.projectsExploreAr,
+        projectsEnquireEn: str(f, "projectsEnquireEn") || "Enquire",
+        projectsEnquireAr: str(f, "projectsEnquireAr") || "استفسر الآن",
+        projectsViewAllEn: str(f, "projectsViewAllEn") || "View All Projects",
+        projectsViewAllAr: str(f, "projectsViewAllAr") || "جميع المشاريع",
+        projectsSpacing: str(f, "projectsSpacing") || "standard",
+        projectsTheme: str(f, "projectsTheme") || "light",
+        projectsImagePosition: str(f, "projectsImagePosition") || "start",
+        projectsLocationTagsEnabled: bool(f, "projectsLocationTagsEnabled"),
+        projectsAllLabelEn: str(f, "projectsAllLabelEn") || "All Projects",
+        projectsAllLabelAr: str(f, "projectsAllLabelAr") || "كافة المشاريع",
+        projectsShowTagCounts: bool(f, "projectsShowTagCounts"),
+        projectsLocationOrder: str(f, "projectsLocationOrder") || "auto",
+        projectsVisibleLocations: (() => {
+          const visible = f.getAll("projectsVisibleLocation").map(String);
+          return visible.length > 0 ? JSON.stringify(visible) : null;
+        })(),
+
+        lifestyleEnabled: bool(f, "lifestyleEnabled"),
+        lifestyleEyebrowEn: str(f, "lifestyleEyebrowEn") || existing.lifestyleEyebrowEn,
+        lifestyleEyebrowAr: str(f, "lifestyleEyebrowAr") || existing.lifestyleEyebrowAr,
+        lifestyleTitleEn: str(f, "lifestyleTitleEn"),
+        lifestyleTitleAr: str(f, "lifestyleTitleAr"),
+        lifestyleMediaUrl: str(f, "lifestyleTopLeftImageUrl") || existing.lifestyleMediaUrl,
+        lifestyleMediaAltEn: str(f, "lifestyleTopLeftImageAltEn") || existing.lifestyleMediaAltEn,
+        lifestyleMediaAltAr: str(f, "lifestyleTopLeftImageAltAr") || existing.lifestyleMediaAltAr,
+
+        lifestyleTopLeftImageUrl: f.has("lifestyleTopLeftImageUrl") ? str(f, "lifestyleTopLeftImageUrl") : undefined,
+        lifestyleTopLeftImageAltEn: f.has("lifestyleTopLeftImageAltEn") ? str(f, "lifestyleTopLeftImageAltEn") : undefined,
+        lifestyleTopLeftImageAltAr: f.has("lifestyleTopLeftImageAltAr") ? str(f, "lifestyleTopLeftImageAltAr") : undefined,
+        lifestyleTopLeftFocalPoint: f.has("lifestyleTopLeftFocalPoint") ? (str(f, "lifestyleTopLeftFocalPoint") || "center") : undefined,
+        lifestyleTopLeftMobileImageUrl: f.has("lifestyleTopLeftMobileImageUrl") ? (str(f, "lifestyleTopLeftMobileImageUrl") || null) : undefined,
+
+        lifestyleTopRightImageUrl: f.has("lifestyleTopRightImageUrl") ? str(f, "lifestyleTopRightImageUrl") : undefined,
+        lifestyleTopRightImageAltEn: f.has("lifestyleTopRightImageAltEn") ? str(f, "lifestyleTopRightImageAltEn") : undefined,
+        lifestyleTopRightImageAltAr: f.has("lifestyleTopRightImageAltAr") ? str(f, "lifestyleTopRightImageAltAr") : undefined,
+        lifestyleTopRightFocalPoint: f.has("lifestyleTopRightFocalPoint") ? (str(f, "lifestyleTopRightFocalPoint") || "center") : undefined,
+        lifestyleTopRightMobileImageUrl: f.has("lifestyleTopRightMobileImageUrl") ? (str(f, "lifestyleTopRightMobileImageUrl") || null) : undefined,
+
+        lifestyleBottomLeftImageUrl: f.has("lifestyleBottomLeftImageUrl") ? str(f, "lifestyleBottomLeftImageUrl") : undefined,
+        lifestyleBottomLeftImageAltEn: f.has("lifestyleBottomLeftImageAltEn") ? str(f, "lifestyleBottomLeftImageAltEn") : undefined,
+        lifestyleBottomLeftImageAltAr: f.has("lifestyleBottomLeftImageAltAr") ? str(f, "lifestyleBottomLeftImageAltAr") : undefined,
+        lifestyleBottomLeftFocalPoint: f.has("lifestyleBottomLeftFocalPoint") ? (str(f, "lifestyleBottomLeftFocalPoint") || "center") : undefined,
+        lifestyleBottomLeftMobileImageUrl: f.has("lifestyleBottomLeftMobileImageUrl") ? (str(f, "lifestyleBottomLeftMobileImageUrl") || null) : undefined,
+
+        lifestyleBottomRightImageUrl: f.has("lifestyleBottomRightImageUrl") ? str(f, "lifestyleBottomRightImageUrl") : undefined,
+        lifestyleBottomRightImageAltEn: f.has("lifestyleBottomRightImageAltEn") ? str(f, "lifestyleBottomRightImageAltEn") : undefined,
+        lifestyleBottomRightImageAltAr: f.has("lifestyleBottomRightImageAltAr") ? str(f, "lifestyleBottomRightImageAltAr") : undefined,
+        lifestyleBottomRightFocalPoint: f.has("lifestyleBottomRightFocalPoint") ? (str(f, "lifestyleBottomRightFocalPoint") || "center") : undefined,
+        lifestyleBottomRightMobileImageUrl: f.has("lifestyleBottomRightMobileImageUrl") ? (str(f, "lifestyleBottomRightMobileImageUrl") || null) : undefined,
+
+        lifestyleCtaEnabled: lifestyleCtaEnabled !== undefined ? lifestyleCtaEnabled : undefined,
+        lifestyleCtaExternal: lifestyleCtaExternal !== undefined ? lifestyleCtaExternal : undefined,
+        lifestyleCtaLabelEn: lifestyleCtaLabelEn || undefined,
+        lifestyleCtaLabelAr: lifestyleCtaLabelAr || undefined,
+        lifestyleCtaUrl: lifestyleCtaUrl || undefined,
+
+        statsEnabled: bool(f, "statsEnabled"),
+        statsLabelEn: str(f, "statsLabelEn") || null,
+        statsLabelAr: str(f, "statsLabelAr") || null,
+        statsHeadingEn: str(f, "statsHeadingEn") || "Stories, ideas, and updates.",
+        statsHeadingAr: str(f, "statsHeadingAr") || "قصص وأفكار ومستجدات",
+        statsDescriptionEn: str(f, "statsDescriptionEn") || null,
+        statsDescriptionAr: str(f, "statsDescriptionAr") || null,
+        statsImageUrl: str(f, "statsImageUrl") || null,
+        statsImageAltEn: str(f, "statsImageAltEn") || "Image Developments architecture",
+        statsImageAltAr: str(f, "statsImageAltAr") || "العمارة المعاصرة في إيمدج للتطوير العقاري",
+        statsImageFocalPoint: str(f, "statsImageFocalPoint") || "center",
+        statsCtaLabelEn: str(f, "statsCtaLabelEn") || "View All Articles",
+        statsCtaLabelAr: str(f, "statsCtaLabelAr") || "عرض جميع المقالات",
+        statsCtaUrl: str(f, "statsCtaUrl") || "/journal",
+        statsJournalMode: str(f, "statsJournalMode") || "AUTO",
+        statsJournalCategory: str(f, "statsJournalCategory") || "ALL",
+        statsJournalCount: parseInt(str(f, "statsJournalCount") || "3", 10) || 3,
+
+        journalEnabled: bool(f, "journalEnabled"),
+        journalEyebrowEn: str(f, "journalEyebrowEn") || existing.journalEyebrowEn,
+        journalEyebrowAr: str(f, "journalEyebrowAr") || existing.journalEyebrowAr,
+        journalTitleEn: str(f, "journalTitleEn") || existing.journalTitleEn,
+        journalTitleAr: str(f, "journalTitleAr") || existing.journalTitleAr,
+
+        closingEnabled: bool(f, "closingEnabled"),
+        closingEyebrowEn: str(f, "closingEyebrowEn") || existing.closingEyebrowEn,
+        closingEyebrowAr: str(f, "closingEyebrowAr") || existing.closingEyebrowAr,
+        closingTitleEn: str(f, "closingTitleEn"),
+        closingTitleAr: str(f, "closingTitleAr"),
+        closingDescriptionEn: str(f, "closingDescriptionEn") || null,
+        closingDescriptionAr: str(f, "closingDescriptionAr") || null,
+        closingFormHeadingEn: str(f, "closingFormHeadingEn") || null,
+        closingFormHeadingAr: str(f, "closingFormHeadingAr") || null,
+        closingSubmitLabelEn: str(f, "closingSubmitLabelEn") || null,
+        closingSubmitLabelAr: str(f, "closingSubmitLabelAr") || null,
+        closingSuccessMessageEn: str(f, "closingSuccessMessageEn") || null,
+        closingSuccessMessageAr: str(f, "closingSuccessMessageAr") || null,
+        closingCtaEn: str(f, "closingCtaEn") || existing.closingCtaEn,
+        closingCtaAr: str(f, "closingCtaAr") || existing.closingCtaAr,
+        closingCtaUrl: str(f, "closingCtaUrl") || existing.closingCtaUrl,
+        sectionOrder: JSON.stringify(order),
+      };
+
+      const availableArticleIds = f.getAll("availableArticleId").map(String);
+      if (availableArticleIds.length > 0) {
+        const selectedArticlesWithOrder = availableArticleIds
+          .filter(id => bool(f, `manualArticleSelect_${id}`))
+          .map(id => ({
+            id,
+            order: parseInt(str(f, `manualArticleOrder_${id}`) || "99", 10),
+          }))
+          .sort((a, b) => a.order - b.order);
+        homepageUpdate.statsJournalArticleIds = JSON.stringify(selectedArticlesWithOrder.map(item => item.id));
+      }
+
+      // 1. Single Atomic Homepage Update
+      await tx.homepage.update({
+        where: { id: "homepage" },
+        data: homepageUpdate,
+      });
+
+      // 2. Company Statistics Update
+      const statIds = f.getAll("statId").map(String);
+      if (statIds.length > 0) {
+        const existingStats = await tx.stat.findMany({
+          where: { id: { in: statIds } },
+          select: { id: true },
+        });
+        const existingStatSet = new Set(existingStats.map(s => s.id));
+        for (const id of statIds) {
+          if (!existingStatSet.has(id)) continue;
+          const isVisible = f.get(`statVisible_${id}`) === "on" || f.get(`statVisible_${id}`) === "true";
+          const orderVal = parseInt(str(f, `statOrder_${id}`) || "0", 10);
+          await tx.stat.update({
+            where: { id },
+            data: {
+              valueEn: str(f, `statValueEn_${id}`),
+              valueAr: str(f, `statValueAr_${id}`),
+              unitEn: str(f, `statUnitEn_${id}`) || null,
+              unitAr: str(f, `statUnitAr_${id}`) || null,
+              labelEn: str(f, `statLabelEn_${id}`),
+              labelAr: str(f, `statLabelAr_${id}`),
+              visible: isVisible,
+              sortOrder: isNaN(orderVal) ? 0 : orderVal,
+            },
+          });
+        }
+      }
+
+      // 3. Managed Projects Featured & Ordering Update
+      const managedProjectIds = f.getAll("managedProjectId").map(String);
+      if (managedProjectIds.length > 0) {
+        const existingProjects = await tx.project.findMany({
+          where: { id: { in: managedProjectIds } },
+          select: { id: true },
+        });
+        const existingProjectSet = new Set(existingProjects.map(p => p.id));
+        for (const pid of managedProjectIds) {
+          if (!existingProjectSet.has(pid)) continue;
+          const isFeatured = bool(f, `projectFeatured_${pid}`);
+          const orderVal = parseInt(str(f, `projectOrder_${pid}`) || "0", 10);
+          await tx.project.update({
+            where: { id: pid },
+            data: {
+              featured: isFeatured,
+              featuredOrder: isNaN(orderVal) ? 0 : orderVal,
+            },
+          });
+        }
+      }
+
+      // 4. Typography Font Sizes
+      await saveFontSizes(f, tx);
+    });
+  } catch (error) {
+    console.error("Homepage save error:", error);
+    const msg = error instanceof Error ? error.message : "Database error";
+    return { error: `Failed to save homepage: ${msg}` };
+  }
+
+  // Safe cache invalidation
+  try {
+    revalidatePath("/en");
+    revalidatePath("/ar");
+    revalidatePath("/admin/homepage");
+    revalidatePath("/", "layout");
+  } catch (revalErr) {
+    console.warn("Notice: Cache revalidation deferred:", revalErr);
+  }
+
+  return { success: "Homepage saved." };
 }
 
 export async function saveAbout(_:ActionState,f:FormData):Promise<ActionState>{
@@ -670,6 +921,30 @@ export async function saveProject(_: ActionState, f: FormData): Promise<ActionSt
     }
   }
 
+  const virtualTourEnabled = f.has("virtualTourEnabled") ? bool(f, "virtualTourEnabled") : false;
+  const virtualTourUrl = str(f, "virtualTourUrl");
+  const virtualTourUrlAr = str(f, "virtualTourUrlAr");
+
+  if (virtualTourEnabled) {
+    if (!virtualTourUrl) {
+      return { error: "Please enter a valid external tour URL when Virtual Tour is enabled." };
+    }
+    if (!/^https:\/\//i.test(virtualTourUrl)) {
+      return { error: "Virtual Tour URL must be a valid external HTTPS URL (e.g. https://tour.example.com)." };
+    }
+    if (/^(?:javascript:|data:|file:)/i.test(virtualTourUrl)) {
+      return { error: "Unsafe Virtual Tour URL scheme." };
+    }
+    if (virtualTourUrlAr) {
+      if (!/^https:\/\//i.test(virtualTourUrlAr)) {
+        return { error: "Arabic Virtual Tour URL override must be a valid external HTTPS URL." };
+      }
+      if (/^(?:javascript:|data:|file:)/i.test(virtualTourUrlAr)) {
+        return { error: "Unsafe Arabic Virtual Tour URL scheme." };
+      }
+    }
+  }
+
   // Format safe URL slug
   let formattedSlug = rawSlug
     .normalize("NFKD")
@@ -788,6 +1063,13 @@ export async function saveProject(_: ActionState, f: FormData): Promise<ActionSt
     masterPlanUrl: str(f, "masterPlanUrl") || null,
     brochureUrl: str(f, "brochureUrl") || null,
     videoTourUrl: str(f, "videoTourUrl") || null,
+    virtualTourEnabled,
+    virtualTourUrl: virtualTourUrl || null,
+    virtualTourUrlAr: virtualTourUrlAr || null,
+    virtualTourLabelEn: str(f, "virtualTourLabelEn") || "Explore Virtual Tour",
+    virtualTourLabelAr: str(f, "virtualTourLabelAr") || "استكشف الجولة الافتراضية",
+    virtualTourDescriptionEn: str(f, "virtualTourDescriptionEn") || null,
+    virtualTourDescriptionAr: str(f, "virtualTourDescriptionAr") || null,
     logoUrl: str(f, "logoUrl") || null,
     keyFacts: legacyKeyFacts,
     highlights: legacyHighlights,
@@ -1074,74 +1356,11 @@ export async function archiveProject(projectId: string): Promise<ActionState> {
   return setProjectStatus(projectId, "ARCHIVED");
 }
 
-export async function uploadProjectVisualTour(_: ActionState, f: FormData): Promise<ActionState> {
+export async function uploadProjectVisualTour(_: ActionState, _f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const projectId = str(f, "projectId");
-  if (!projectId) return { error: "Missing project ID." };
-  const file = f.get("tourFile") as File | null;
-  if (!file || !file.size) return { error: "Please select an HTML file (.html) or ZIP archive (.zip) to upload." };
-
-  const titleEn = str(f, "titleEn") || file.name.replace(/\.[^/.]+$/, "");
-  const titleAr = str(f, "titleAr") || titleEn;
-  const descriptionEn = str(f, "descriptionEn") || null;
-  const descriptionAr = str(f, "descriptionAr") || null;
-  const localeTarget = str(f, "localeTarget") || "ALL";
-  const posterUrl = str(f, "posterUrl") || null;
-  const isDefault = bool(f, "isDefault");
-
-  const result = await processVisualTourUpload(file);
-  if (!result.success || !result.tourId) {
-    return { error: result.error || "Failed to process visual tour archive." };
-  }
-
-  try {
-    if (isDefault) {
-      await prisma.projectVisualTour.updateMany({
-        where: { projectId, localeTarget },
-        data: { isDefault: false },
-      });
-    }
-
-    await prisma.projectVisualTour.create({
-      data: {
-        id: result.tourId,
-        projectId,
-        titleEn,
-        titleAr,
-        descriptionEn,
-        descriptionAr,
-        localeTarget,
-        sourceType: result.sourceType || "ZIP",
-        originalFilename: result.originalFilename || file.name,
-        extractedPrefix: result.extractedPrefix!,
-        entryFilePath: result.entryFilePath || "index.html",
-        uploadedSize: result.uploadedSize || 0,
-        extractedSize: result.extractedSize || 0,
-        assetCount: result.assetCount || 1,
-        posterUrl,
-        processingState: "READY",
-        publicationState: "PUBLISHED",
-        isDefault,
-        publishedAt: new Date(),
-      },
-    });
-
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (project) {
-      revalidatePath(`/en/projects/${project.slug}`);
-      revalidatePath(`/ar/projects/${project.slug}`);
-    }
-    revalidatePath(`/admin/projects/${projectId}`);
-    revalidatePath("/en/projects");
-    revalidatePath("/ar/projects");
-
-    return {
-      success: `Visual tour "${titleEn}" uploaded and verified! Processed ${result.assetCount} asset(s) with entry file "${result.entryFilePath}".`,
-    };
-  } catch (err: any) {
-    await deleteVisualTourAssets(result.tourId).catch(() => undefined);
-    return { error: `Database error while saving visual tour: ${err.message}` };
-  }
+  return {
+    error: "HTML/ZIP visual tour file uploads have been retired. Visual tours must now be configured as external HTTPS URLs under the Virtual Tour tab.",
+  };
 }
 
 export async function updateProjectVisualTour(_: ActionState, f: FormData): Promise<ActionState> {
@@ -1204,6 +1423,38 @@ export async function deleteProjectVisualTour(f: FormData): Promise<void> {
 
 export async function updateLead(f:FormData){await requireAdmin();const id=str(f,"id");const status=str(f,"status");if(!["NEW","CONTACTED","QUALIFIED","CLOSED"].includes(status))return;await prisma.contactSubmission.update({where:{id},data:{status,notes:str(f,"notes")||null}});revalidatePath("/admin/leads");}
 export async function deleteLead(f:FormData){await requireAdmin();await prisma.contactSubmission.delete({where:{id:str(f,"id")}});revalidatePath("/admin/leads");}
+
+export async function markLeadReadStatus(id: string, isRead: boolean) {
+  await requireAdmin();
+  await prisma.contactSubmission.update({
+    where: { id },
+    data: { isRead },
+  });
+  revalidatePath("/admin/leads");
+}
+
+export async function toggleLeadArchive(id: string, isArchived: boolean) {
+  await requireAdmin();
+  await prisma.contactSubmission.update({
+    where: { id },
+    data: { isArchived },
+  });
+  revalidatePath("/admin/leads");
+}
+
+export async function retryLeadNotificationAction(id: string): Promise<{ success?: string; error?: string }> {
+  await requireAdmin();
+  const { retryLeadNotification } = await import("@/lib/notifications/email-service");
+  const result = await retryLeadNotification(id);
+  revalidatePath("/admin/leads");
+  if (result.success) {
+    return { success: `Notification delivered successfully (${result.messageId || "sent"}).` };
+  } else if (result.status === "BLOCKED") {
+    return { error: `Delivery blocked: ${result.error}` };
+  } else {
+    return { error: `Delivery failed: ${result.error || "Unknown error"}` };
+  }
+}
 
 export async function saveNews(_:ActionState,f:FormData):Promise<ActionState>{
   await requireAdmin();
@@ -1386,11 +1637,13 @@ export async function saveNavigation(_: ActionState, f: FormData): Promise<Actio
     labelAr: str(f, `labelAr_${id}`),
     url: str(f, `url_${id}`),
     visible: bool(f, `visible_${id}`),
-    mobileVisible: f.has(`mobileVisible_${id}`) ? bool(f, `mobileVisible_${id}`) : true,
+    mobileVisible: bool(f, `mobileVisible_${id}`),
     external: bool(f, `external_${id}`),
     group: str(f, `group_${id}`) || "primary",
     previewImageUrl: str(f, `previewImageUrl_${id}`) || null,
     previewImageUrlAr: str(f, `previewImageUrlAr_${id}`) || null,
+    previewImageAltEn: str(f, `previewImageAltEn_${id}`) || null,
+    previewImageAltAr: str(f, `previewImageAltAr_${id}`) || null,
     focalPoint: str(f, `focalPoint_${id}`) || "center",
     sortOrder,
   }));
@@ -1403,17 +1656,28 @@ export async function saveNavigation(_: ActionState, f: FormData): Promise<Actio
   const defaultMenuFocalPoint = str(f, "defaultMenuMediaFocalPoint") || "center";
   const defaultMenuAltEn = str(f, "defaultMenuMediaAltEn");
   const defaultMenuAltAr = str(f, "defaultMenuMediaAltAr");
+  const morePagesLabelEn = str(f, "morePagesLabelEn");
+  const morePagesLabelAr = str(f, "morePagesLabelAr");
+  const menuFontSizeDesktop = str(f, "menuFontSizeDesktop");
+  const menuFontSizeMobile = str(f, "menuFontSizeMobile");
 
   await prisma.$transaction(async (tx) => {
-    if (defaultMenuUrl) {
+    const settingsUpdate: Record<string, any> = {};
+    if (f.has("defaultMenuMediaUrl")) {
+      settingsUpdate.menuMediaUrl = defaultMenuUrl || "/images/menu.jpg";
+    }
+    if (f.has("defaultMenuMediaFocalPoint")) settingsUpdate.menuMediaFocalPoint = defaultMenuFocalPoint;
+    if (f.has("defaultMenuMediaAltEn")) settingsUpdate.menuMediaAltEn = defaultMenuAltEn;
+    if (f.has("defaultMenuMediaAltAr")) settingsUpdate.menuMediaAltAr = defaultMenuAltAr;
+    if (f.has("morePagesLabelEn")) settingsUpdate.morePagesLabelEn = morePagesLabelEn || "More Pages";
+    if (f.has("morePagesLabelAr")) settingsUpdate.morePagesLabelAr = morePagesLabelAr || "المزيد من الصفحات";
+    if (f.has("menuFontSizeDesktop")) settingsUpdate.menuFontSizeDesktop = menuFontSizeDesktop || "1.125rem";
+    if (f.has("menuFontSizeMobile")) settingsUpdate.menuFontSizeMobile = menuFontSizeMobile || "1rem";
+
+    if (Object.keys(settingsUpdate).length > 0) {
       await tx.globalSettings.update({
         where: { id: "global" },
-        data: {
-          menuMediaUrl: defaultMenuUrl,
-          menuMediaFocalPoint: defaultMenuFocalPoint,
-          ...(defaultMenuAltEn ? { menuMediaAltEn: defaultMenuAltEn } : {}),
-          ...(defaultMenuAltAr ? { menuMediaAltAr: defaultMenuAltAr } : {}),
-        },
+        data: settingsUpdate,
       });
     }
 
@@ -1433,13 +1697,15 @@ export async function saveNavigation(_: ActionState, f: FormData): Promise<Actio
         group: item.group,
         previewImageUrl: item.previewImageUrl,
         previewImageUrlAr: item.previewImageUrlAr,
+        previewImageAltEn: item.previewImageAltEn,
+        previewImageAltAr: item.previewImageAltAr,
         focalPoint: item.focalPoint,
         sortOrder: item.sortOrder,
       };
       if (existingIds.has(item.id)) {
         await tx.navigationItem.update({ where: { id: item.id }, data });
       } else {
-        await tx.navigationItem.create({ data });
+        await tx.navigationItem.create({ data: { id: item.id, ...data } });
       }
     }
   });
@@ -1486,7 +1752,11 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
     await tx.globalSettings.update({
       where:{id:"global"},
       data:{
-        siteNameEn:str(f,"siteNameEn"),siteNameAr:str(f,"siteNameAr"),contactEmail:email,phone:str(f,"phone"),hotline:str(f,"hotline")||"17087",companyBrochureUrl:str(f,"companyBrochureUrl")||null,workingHoursEn:str(f,"workingHoursEn")||"Sunday - Thursday: 9:00 AM - 6:00 PM",workingHoursAr:str(f,"workingHoursAr")||"الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م",addressEn:str(f,"addressEn"),addressAr:str(f,"addressAr"),mapUrl:str(f,"mapUrl")||null,descriptionEn:str(f,"descriptionEn")||null,descriptionAr:str(f,"descriptionAr")||null,footerExploreHeadingEn:str(f,"footerExploreHeadingEn")||"Explore",footerExploreHeadingAr:str(f,"footerExploreHeadingAr")||"استكشف",footerProjectsHeadingEn:str(f,"footerProjectsHeadingEn")||"Our Projects",footerProjectsHeadingAr:str(f,"footerProjectsHeadingAr")||"مشاريعنا",footerContactHeadingEn:str(f,"footerContactHeadingEn")||"Contact",footerContactHeadingAr:str(f,"footerContactHeadingAr")||"تواصل معنا",callbackEnabled:bool(f,"callbackEnabled"),callbackLabelEn:str(f,"callbackLabelEn")||"Request a Call Back",callbackLabelAr:str(f,"callbackLabelAr")||"طلب معاودة الاتصال",copyrightEn:str(f,"copyrightEn"),copyrightAr:str(f,"copyrightAr"),defaultSeoTitleEn:str(f,"defaultSeoTitleEn"),defaultSeoTitleAr:str(f,"defaultSeoTitleAr"),defaultSeoDescriptionEn:str(f,"defaultSeoDescriptionEn"),defaultSeoDescriptionAr:str(f,"defaultSeoDescriptionAr"),defaultOgImageUrl:str(f,"defaultOgImageUrl")||null,menuMediaUrl:str(f,"menuMediaUrl"),menuMediaAltEn:str(f,"menuMediaAltEn"),menuMediaAltAr:str(f,"menuMediaAltAr")
+        siteNameEn:str(f,"siteNameEn"),siteNameAr:str(f,"siteNameAr"),contactEmail:email,phone:str(f,"phone"),hotline:str(f,"hotline")||"17087",companyBrochureUrl:str(f,"companyBrochureUrl")||null,workingHoursEn:str(f,"workingHoursEn")||"Sunday - Thursday: 9:00 AM - 6:00 PM",workingHoursAr:str(f,"workingHoursAr")||"الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م",addressEn:str(f,"addressEn"),addressAr:str(f,"addressAr"),mapUrl:str(f,"mapUrl")||null,descriptionEn:str(f,"descriptionEn")||null,descriptionAr:str(f,"descriptionAr")||null,footerExploreHeadingEn:str(f,"footerExploreHeadingEn")||"Explore",footerExploreHeadingAr:str(f,"footerExploreHeadingAr")||"استكشف",footerProjectsHeadingEn:str(f,"footerProjectsHeadingEn")||"Our Projects",footerProjectsHeadingAr:str(f,"footerProjectsHeadingAr")||"مشاريعنا",footerContactHeadingEn:str(f,"footerContactHeadingEn")||"Contact",footerContactHeadingAr:str(f,"footerContactHeadingAr")||"تواصل معنا",callbackEnabled:bool(f,"callbackEnabled"),callbackLabelEn:str(f,"callbackLabelEn")||"Request a Call Back",callbackLabelAr:str(f,"callbackLabelAr")||"طلب معاودة الاتصال",copyrightEn:str(f,"copyrightEn"),copyrightAr:str(f,"copyrightAr"),defaultSeoTitleEn:str(f,"defaultSeoTitleEn"),defaultSeoTitleAr:str(f,"defaultSeoTitleAr"),defaultSeoDescriptionEn:str(f,"defaultSeoDescriptionEn"),defaultSeoDescriptionAr:str(f,"defaultSeoDescriptionAr"),defaultOgImageUrl:str(f,"defaultOgImageUrl")||null,menuMediaUrl:str(f,"menuMediaUrl"),menuMediaAltEn:str(f,"menuMediaAltEn"),menuMediaAltAr:str(f,"menuMediaAltAr"),
+        notificationEmailEnabled: bool(f, "notificationEmailEnabled"),
+        notificationRecipientEmail: str(f, "notificationRecipientEmail") || null,
+        careersRecipientEmail: str(f, "careersRecipientEmail") || null,
+        notificationSenderEmail: str(f, "notificationSenderEmail") || null
       }
     });
     await tx.socialLink.deleteMany({where:{globalSettingsId:"global"}});
@@ -1517,6 +1787,24 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
   revalidatePath("/ar/terms");
   revalidatePath("/", "layout");
   return { success: "Global settings saved." };
+}
+
+export async function testNotificationEmailAction(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const email = str(f, "recipientEmail");
+  if (!email || !email.includes("@")) {
+    return { error: "Please enter a valid recipient email address for testing." };
+  }
+  const { sendTestNotificationEmail } = await import("@/lib/notifications/email-service");
+  const result = await sendTestNotificationEmail(email);
+  revalidatePath("/admin/settings");
+  if (result.success) {
+    return { success: `Test email successfully sent to ${email}! (Status: ${result.status})` };
+  } else if (result.status === "BLOCKED") {
+    return { error: `Test delivery blocked: ${result.error}` };
+  } else {
+    return { error: `Test delivery failed: ${result.error || "Connection error"}` };
+  }
 }
 
 export async function uploadMedia(_:ActionState,f:FormData):Promise<ActionState>{await requireAdmin();const file=f.get("file");if(!(file instanceof File)||file.size===0)return{error:"Choose an image or video."};const result=await storeMedia(file);if(result.error)return{error:result.error};if(result.asset&&(str(f,"altEn")||str(f,"altAr")))await prisma.mediaAsset.update({where:{id:result.asset.id},data:{altEn:str(f,"altEn")||null,altAr:str(f,"altAr")||null}});revalidatePath("/admin/media");revalidatePath("/admin/homepage");return{success:`${result.asset?.kind==="VIDEO"?"Video":"Image"} uploaded to the Media Library.`};}

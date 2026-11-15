@@ -15,8 +15,6 @@ import type {
 } from "@prisma/client";
 import {
   saveProject,
-  uploadProjectVisualTour,
-  deleteProjectVisualTour,
   setProjectStatus,
   type UploadedMedia,
   type ActionState,
@@ -64,7 +62,7 @@ const TABS: Array<{ key: TabKey; labelEn: string; labelAr: string; number: strin
   { key: "gallery", labelEn: "Project Gallery", labelAr: "معرض المشروع", number: "08" },
   { key: "construction", labelEn: "Construction Updates", labelAr: "مستجدات البناء", number: "09" },
   { key: "brochure", labelEn: "Brochure & CTA", labelAr: "الكتيب والإجراءات", number: "10" },
-  { key: "visual_tours", labelEn: "Visual Tours", labelAr: "الجولات الافتراضية", number: "11" },
+  { key: "visual_tours", labelEn: "Virtual Tour", labelAr: "الجولة الافتراضية", number: "11" },
   { key: "seo", labelEn: "SEO & Publishing", labelAr: "الظهور والنشر", number: "12" },
 ];
 
@@ -142,6 +140,14 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
     seoDescriptionEn: item?.seoDescriptionEn ?? "",
     seoDescriptionAr: item?.seoDescriptionAr ?? "",
     ogImageUrl: item?.ogImageUrl ?? "",
+
+    virtualTourEnabled: (item as any)?.virtualTourEnabled ?? false,
+    virtualTourUrl: (item as any)?.virtualTourUrl ?? "",
+    virtualTourUrlAr: (item as any)?.virtualTourUrlAr ?? "",
+    virtualTourLabelEn: (item as any)?.virtualTourLabelEn ?? "Explore Virtual Tour",
+    virtualTourLabelAr: (item as any)?.virtualTourLabelAr ?? "استكشف الجولة الافتراضية",
+    virtualTourDescriptionEn: (item as any)?.virtualTourDescriptionEn ?? "",
+    virtualTourDescriptionAr: (item as any)?.virtualTourDescriptionAr ?? "",
   });
 
   // Repeatable items state
@@ -342,11 +348,6 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
     }
   });
 
-  // Visual tour state
-  const [visualToursList, setVisualToursList] = useState<ProjectVisualTour[]>(item?.visualTours || []);
-  const [tourUploadState, setTourUploadState] = useState<ActionState>({});
-  const [isUploadingTour, setIsUploadingTour] = useState(false);
-  const [activePreviewTour, setActivePreviewTour] = useState<ProjectVisualTour | null>(null);
 
   // BeforeUnload warning when dirty
   useEffect(() => {
@@ -420,6 +421,21 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
       }
     }
 
+    if (formData.virtualTourEnabled) {
+      if (!formData.virtualTourUrl.trim()) {
+        setValidationErrors({ virtualTourUrl: "Please enter an external HTTPS tour URL." });
+        setActiveTab("visual_tours");
+        setActionResult({ error: "Please enter a valid external tour URL when Virtual Tour is enabled." });
+        return;
+      }
+      if (!/^https:\/\//i.test(formData.virtualTourUrl.trim())) {
+        setValidationErrors({ virtualTourUrl: "Virtual Tour URL must start with https://" });
+        setActiveTab("visual_tours");
+        setActionResult({ error: "Virtual Tour URL must be a valid external HTTPS URL (e.g. https://tour.example.com)." });
+        return;
+      }
+    }
+
     startTransition(async () => {
       const fd = new FormData();
       if (projectId) fd.set("id", projectId);
@@ -489,64 +505,6 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
     });
   };
 
-  // Handle tour upload without destructive page reload
-  const handleTourUpload = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!projectId) {
-      setTourUploadState({ error: "Please save the project draft first before uploading a visual tour." });
-      return;
-    }
-    const form = e.currentTarget;
-    const tourFd = new FormData(form);
-    tourFd.set("projectId", projectId);
-
-    setIsUploadingTour(true);
-    setTourUploadState({});
-
-    try {
-      const res = await uploadProjectVisualTour({}, tourFd);
-      setTourUploadState(res);
-      if (res.success) {
-        form.reset();
-        // Append optimistic tour representation or fetch updated
-        setVisualToursList((prev) => [
-          ...prev,
-          {
-            id: `tour-${Date.now()}`,
-            projectId: projectId,
-            titleEn: String(tourFd.get("titleEn") || "Visual Tour"),
-            titleAr: String(tourFd.get("titleAr") || "جولة افتراضية"),
-            descriptionEn: String(tourFd.get("descriptionEn") || ""),
-            descriptionAr: String(tourFd.get("descriptionAr") || ""),
-            localeTarget: String(tourFd.get("localeTarget") || "ALL"),
-            publicationState: "PUBLISHED",
-            processingState: "READY",
-            isDefault: tourFd.get("isDefault") === "on",
-            sourceType: "HTML",
-            originalFilename: "tour.zip",
-            storageKey: null,
-            mimeType: "application/zip",
-            assetVersion: "v1",
-            uploadedSize: 0,
-            extractedSize: 0,
-            extractedPrefix: "/uploads/tours",
-            entryFilePath: "index.html",
-            posterUrl: null,
-            assetCount: 1,
-            processingError: null,
-            publishedAt: new Date(),
-            sortOrder: prev.length,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        ]);
-      }
-    } catch (err: any) {
-      setTourUploadState({ error: err.message || "Tour upload failed." });
-    } finally {
-      setIsUploadingTour(false);
-    }
-  };
 
   const previewEnUrl = formData.slug ? `/en/projects/${formData.slug}${formData.status !== "PUBLISHED" ? "?preview=true" : ""}` : "#";
   const previewArUrl = formData.slug ? `/ar/projects/${formData.slug}${formData.status !== "PUBLISHED" ? "?preview=true" : ""}` : "#";
@@ -1956,205 +1914,115 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
         </section>
 
         {/* =========================================================
-            TAB 11: Visual Tours
+            TAB 11: Virtual Tour / الجولة الافتراضية
         ========================================================= */}
         <section className="panel" style={{ display: activeTab === "visual_tours" ? "block" : "none" }}>
-          <h2>11. Project HTML Visual Tours (Active Content)</h2>
+          <h2>11. Virtual Tour / الجولة الافتراضية</h2>
           <p className="hint">
-            Upload self-contained HTML visual tours (.html) or complete ZIP packages (.zip) containing index.html and all local assets.
-            Tours are automatically processed with strict path traversal defenses and hosted in sandboxed viewers.
+            Configure an external 360° interactive virtual tour hosted on an external service or dedicated project subdomain (e.g. <code>https://tour.aera.imagedevelopments.com</code> or Matterport). The public project CTA opens this external destination in a new browser tab.
           </p>
 
-          {!projectId ? (
-            <div style={{ padding: "24px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", marginBottom: "20px" }}>
-              <strong style={{ color: "#92400e", display: "block", marginBottom: "6px" }}>Save Draft First</strong>
-              <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#92400e" }}>
-                Visual tours require an assigned project record. Save your current edits as a draft to upload and manage tours.
-              </p>
-              <button
-                type="button"
-                onClick={() => handleSave("DRAFT")}
-                disabled={isPending}
-                className="primary"
-                style={{ fontSize: "12px", padding: "8px 16px" }}
-              >
-                {isPending ? "Saving Draft..." : "Save Draft & Enable Tours"}
-              </button>
+          <div style={{ marginBottom: "20px", padding: "16px", background: "#f8faf9", borderRadius: "8px", border: "1px solid var(--line)" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0, cursor: "pointer", fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(formData.virtualTourEnabled)}
+                onChange={(e) => handleFieldChange("virtualTourEnabled", e.target.checked)}
+                style={{ width: "18px", height: "18px" }}
+              />
+              <span>Enable Virtual Tour CTA on Project Page / تفعيل زر الجولة الافتراضية</span>
+            </label>
+          </div>
+
+          <div style={{ opacity: formData.virtualTourEnabled ? 1 : 0.6, pointerEvents: formData.virtualTourEnabled ? "auto" : "none", transition: "opacity 0.2s" }}>
+            <div style={{ marginBottom: "16px" }}>
+              <label>
+                Tour External URL (HTTPS only) *
+                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                  <input
+                    type="url"
+                    value={formData.virtualTourUrl}
+                    onChange={(e) => handleFieldChange("virtualTourUrl", e.target.value)}
+                    placeholder="https://tour.example.com or https://my.matterport.com/show/?m=..."
+                    style={{ flex: 1 }}
+                  />
+                  {formData.virtualTourUrl && /^https:\/\//i.test(formData.virtualTourUrl) && (
+                    <a
+                      href={formData.virtualTourUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="secondary button"
+                      style={{ padding: "8px 14px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      Open Link ↗
+                    </a>
+                  )}
+                </div>
+                {validationErrors.virtualTourUrl && (
+                  <span style={{ color: "var(--terracotta, #b36f55)", fontSize: "12px", display: "block", marginTop: "4px" }}>
+                    {validationErrors.virtualTourUrl}
+                  </span>
+                )}
+              </label>
             </div>
-          ) : (
-            <>
-              {/* Existing visual tours list */}
-              {visualToursList.length > 0 ? (
-                <div style={{ marginBottom: "28px" }}>
-                  <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: "12px" }}>
-                    Configured Visual Tours ({visualToursList.length})
-                  </h3>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {visualToursList.map((tour) => (
-                      <div
-                        key={tour.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 140px 100px 180px",
-                          gap: "12px",
-                          alignItems: "center",
-                          padding: "12px 16px",
-                          background: "#fbfcfb",
-                          border: "1px solid var(--line)",
-                          borderRadius: "6px",
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                            <strong style={{ fontSize: "14px", color: "var(--ink)" }}>{tour.titleEn}</strong>
-                            <span style={{ fontSize: "13px", color: "var(--muted)" }}>({tour.titleAr})</span>
-                            {tour.isDefault && (
-                              <span
-                                style={{
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  color: "#166534",
-                                  background: "#dcfce7",
-                                  padding: "2px 8px",
-                                  borderRadius: "10px",
-                                }}
-                              >
-                                ★ Default Tour
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                            Entry: <code>{tour.entryFilePath}</code> • Prefix: <code>{tour.extractedPrefix}</code>
-                          </div>
-                        </div>
 
-                        <div>
-                          <span
-                            className={`status-badge status-${tour.publicationState.toLowerCase()}`}
-                            style={{ fontSize: "11px" }}
-                          >
-                            {tour.publicationState}
-                          </span>
-                        </div>
+            <div style={{ marginBottom: "16px" }}>
+              <label>
+                Arabic Tour URL Override (Optional) / رابط الجولة المخصص للغة العربية (اختياري)
+                <input
+                  type="url"
+                  value={formData.virtualTourUrlAr}
+                  onChange={(e) => handleFieldChange("virtualTourUrlAr", e.target.value)}
+                  placeholder="https://tour.example.com/ar (leave empty to use primary URL above)"
+                  style={{ marginTop: "4px" }}
+                />
+              </label>
+            </div>
 
-                        <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                          Target: <strong>{tour.localeTarget}</strong>
-                        </div>
+            <div className="bilingual" style={{ marginBottom: "16px" }}>
+              <label>
+                Button Label (English)
+                <input
+                  type="text"
+                  value={formData.virtualTourLabelEn}
+                  onChange={(e) => handleFieldChange("virtualTourLabelEn", e.target.value)}
+                  placeholder="Explore Virtual Tour"
+                />
+              </label>
+              <label>
+                نص الزر (العربية)
+                <input
+                  type="text"
+                  dir="rtl"
+                  value={formData.virtualTourLabelAr}
+                  onChange={(e) => handleFieldChange("virtualTourLabelAr", e.target.value)}
+                  placeholder="استكشف الجولة الافتراضية"
+                />
+              </label>
+            </div>
 
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                          <button
-                            type="button"
-                            onClick={() => setActivePreviewTour(tour)}
-                            className="secondary"
-                            style={{ padding: "6px 10px", fontSize: "12px" }}
-                          >
-                            Preview ↗
-                          </button>
-                          <form
-                            action={async (fd) => {
-                              if (confirm(`Delete visual tour "${tour.titleEn}"? This removes all extracted files.`)) {
-                                await deleteProjectVisualTour(fd);
-                                setVisualToursList((prev) => prev.filter((t) => t.id !== tour.id));
-                              }
-                            }}
-                          >
-                            <input type="hidden" name="id" value={tour.id} />
-                            <button
-                              type="submit"
-                              className="danger"
-                              style={{ padding: "6px 10px", fontSize: "12px" }}
-                            >
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding: "20px", background: "#f8faf9", borderRadius: "6px", marginBottom: "24px", textAlign: "center" }}>
-                  <p style={{ margin: 0, fontSize: "14px", color: "var(--muted)" }}>No visual tours uploaded yet for this project.</p>
-                </div>
-              )}
-
-              {/* Upload New Visual Tour Card */}
-              <div
-                style={{
-                  padding: "20px",
-                  background: "#ffffff",
-                  border: "1px dashed var(--forest)",
-                  borderRadius: "8px",
-                }}
-              >
-                <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--ink)", margin: "0 0 8px" }}>
-                  + Upload New HTML Visual Tour
-                </h3>
-                <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 16px" }}>
-                  Accepted formats: Self-contained .html or complete .zip archive (up to 100 MB). All directories, panorama assets, scripts, and stylesheets in the ZIP are preserved.
-                </p>
-
-                {tourUploadState.error && (
-                  <div className="admin-alert admin-alert--error" style={{ marginBottom: "16px" }}>
-                    <strong>Upload Error:</strong> {tourUploadState.error}
-                  </div>
-                )}
-                {tourUploadState.success && (
-                  <div className="admin-alert admin-alert--success" style={{ marginBottom: "16px" }}>
-                    {tourUploadState.success}
-                  </div>
-                )}
-
-                <form onSubmit={handleTourUpload}>
-                  <div className="bilingual">
-                    <label>
-                      Tour Title (English) *
-                      <input type="text" name="titleEn" placeholder="e.g. 360° Virtual Walkthrough" required />
-                    </label>
-                    <label>
-                      عنوان الجولة الافتراضية (العربية) *
-                      <input type="text" dir="rtl" name="titleAr" placeholder="مثال: جولة افتراضية ٣٦٠ درجة" required />
-                    </label>
-                  </div>
-
-                  <div className="bilingual" style={{ marginTop: "12px" }}>
-                    <label>
-                      Tour File (.html or .zip) *
-                      <input
-                        type="file"
-                        name="tourFile"
-                        accept=".zip,.html,.htm"
-                        required
-                        style={{ padding: "8px", background: "#f8faf9", borderRadius: "4px", border: "1px solid var(--line)" }}
-                      />
-                    </label>
-
-                    <label>
-                      Target Audience / Language
-                      <select name="localeTarget" defaultValue="ALL">
-                        <option value="ALL">Both Languages (English &amp; Arabic)</option>
-                        <option value="en">English Only</option>
-                        <option value="ar">Arabic Only</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div style={{ marginTop: "12px", display: "flex", gap: "16px", alignItems: "center" }}>
-                    <label style={{ margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
-                      <input type="checkbox" name="isDefault" defaultChecked={!visualToursList.length} />
-                      <span>Set as default visual tour on project page</span>
-                    </label>
-                  </div>
-
-                  <div style={{ marginTop: "16px" }}>
-                    <button type="submit" disabled={isUploadingTour} className="primary">
-                      {isUploadingTour ? "Extracting & Verifying Archive..." : "Upload & Publish Visual Tour"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </>
-          )}
+            <div className="bilingual">
+              <label>
+                Optional Short Description (English)
+                <textarea
+                  value={formData.virtualTourDescriptionEn}
+                  onChange={(e) => handleFieldChange("virtualTourDescriptionEn", e.target.value)}
+                  placeholder="Immersive 360-degree architectural walkthrough..."
+                  rows={2}
+                />
+              </label>
+              <label>
+                وصف قصير اختياري (العربية)
+                <textarea
+                  dir="rtl"
+                  value={formData.virtualTourDescriptionAr}
+                  onChange={(e) => handleFieldChange("virtualTourDescriptionAr", e.target.value)}
+                  placeholder="جولة تفاعلية متكاملة بزاوية ٣٦٠ درجة..."
+                  rows={2}
+                />
+              </label>
+            </div>
+          </div>
         </section>
 
         {/* =========================================================
@@ -2262,74 +2130,6 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
           ← Cancel &amp; Return to Projects List
         </Link>
       </div>
-
-      {/* Visual Tour In-CMS Sandboxed Preview Modal */}
-      {activePreviewTour && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 99999,
-            display: "flex",
-            flexDirection: "column",
-            padding: "20px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "12px",
-              color: "#ffffff",
-            }}
-          >
-            <div>
-              <strong style={{ fontSize: "16px" }}>{activePreviewTour.titleEn}</strong>
-              <span style={{ fontSize: "13px", opacity: 0.7, marginInlineStart: "8px" }}>
-                ({activePreviewTour.extractedPrefix}/{activePreviewTour.entryFilePath})
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActivePreviewTour(null)}
-              style={{
-                background: "#ffffff",
-                color: "#000000",
-                border: "none",
-                borderRadius: "4px",
-                padding: "6px 14px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Close Preview ✕
-            </button>
-          </div>
-
-          <div
-            style={{
-              flex: 1,
-              borderRadius: "8px",
-              overflow: "hidden",
-              background: "#000000",
-              position: "relative",
-            }}
-          >
-            <iframe
-              src={`${activePreviewTour.extractedPrefix}/${activePreviewTour.entryFilePath}`}
-              title={activePreviewTour.titleEn}
-              sandbox="allow-scripts allow-same-origin"
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-              }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

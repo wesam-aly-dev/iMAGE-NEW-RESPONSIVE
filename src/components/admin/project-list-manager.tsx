@@ -192,14 +192,14 @@ export function ProjectListManager({ items }: ProjectListManagerProps) {
               <th>Project &amp; Location</th>
               <th>Status</th>
               <th>Type &amp; Delivery</th>
-              <th>Visual Tour</th>
+              <th>Virtual Tour</th>
               <th>Last Updated</th>
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((x) => {
-              const hasTours = Boolean(x.visualTours && x.visualTours.length > 0);
+              const hasVirtualTour = Boolean(x.virtualTourEnabled && x.virtualTourUrl);
               return (
                 <tr key={x.id}>
                   <td style={{ width: "68px" }}>
@@ -237,8 +237,11 @@ export function ProjectListManager({ items }: ProjectListManagerProps) {
                     </div>
                   </td>
                   <td>
-                    {hasTours ? (
-                      <span
+                    {hasVirtualTour ? (
+                      <a
+                        href={x.virtualTourUrl!}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
                           fontSize: "11px",
                           fontWeight: 600,
@@ -249,10 +252,12 @@ export function ProjectListManager({ items }: ProjectListManagerProps) {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
+                          textDecoration: "none",
                         }}
+                        title={x.virtualTourUrl!}
                       >
-                        ✓ {x.visualTours!.length} Tour{x.visualTours!.length === 1 ? "" : "s"}
-                      </span>
+                        ✓ External Tour ↗
+                      </a>
                     ) : (
                       <span style={{ fontSize: "12px", color: "var(--muted)" }}>—</span>
                     )}

@@ -95,6 +95,11 @@ const mockProjectDetailCopy: ProjectDetailPageContent = {
     constructionUpdates: [
       { date: "2026-09-15", title: "Phase 1 Foundation Pouring Completed" },
     ],
+    virtualTour: {
+      enabled: true,
+      url: "https://tours.imagedevelopments.com/solaya",
+      label: "Visual Tour",
+    },
     visualTours: [
       {
         id: "tour-solaya-1",
@@ -207,6 +212,11 @@ describe("ProjectDetailExperience Component", () => {
         name: "سوليا",
         location: "رأس الحكمة، الساحل الشمالي",
         shortDescription: "رؤية معمارية ساحلية راقية في رأس الحكمة.",
+        virtualTour: {
+          enabled: true,
+          url: "https://tours.imagedevelopments.com/solaya?lang=ar",
+          label: "جولة افتراضية",
+        },
       },
     };
 

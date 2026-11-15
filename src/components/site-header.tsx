@@ -115,7 +115,8 @@ export function SiteHeader({
     menuImageFocalPoint: "center",
   };
 
-  const defaultMenuImage = settings.menuImage || "/cms/about-detail.webp";
+  const fallbackSafeMedia = "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1600&q=86";
+  const defaultMenuImage = settings.menuImage || "/images/menu.jpg" || fallbackSafeMedia;
   const defaultMenuAlt = settings.menuImageAlt || "Image Developments";
   const defaultMenuFocalPoint = settings.menuImageFocalPoint || "center";
 
@@ -125,7 +126,7 @@ export function SiteHeader({
   const initialPreview = {
     url: currentActiveItem?.previewImage || defaultMenuImage,
     focalPoint: currentActiveItem?.focalPoint || defaultMenuFocalPoint,
-    alt: currentActiveItem?.label || defaultMenuAlt,
+    alt: currentActiveItem?.imageAlt || currentActiveItem?.label || defaultMenuAlt,
   };
 
   const [preview, setPreview] = useState(initialPreview);
@@ -215,7 +216,7 @@ export function SiteHeader({
     setPreview({
       url: targetUrl,
       focalPoint: targetFocalPoint,
-      alt: item.label,
+      alt: item.imageAlt || item.label || defaultMenuAlt,
     });
   };
 
@@ -227,7 +228,7 @@ export function SiteHeader({
     setPreview({
       url: targetUrl,
       focalPoint: targetFocalPoint,
-      alt: item.label,
+      alt: item.imageAlt || item.label || defaultMenuAlt,
     });
   };
 
@@ -458,7 +459,7 @@ export function SiteHeader({
                           aria-controls="menu-secondary-nav"
                           onClick={() => setIsMoreOpen((v) => !v)}
                         >
-                          <span>{copy.locale === "ar" ? "المزيد من الصفحات" : "More Pages"}</span>
+                          <span>{copy.common.morePages || (copy.locale === "ar" ? "المزيد من الصفحات" : "More Pages")}</span>
                           <svg
                             className={`menu-more-chevron ${isMoreOpen ? "is-expanded" : ""}`}
                             width="14"

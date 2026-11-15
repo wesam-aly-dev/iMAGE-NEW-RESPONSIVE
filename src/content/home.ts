@@ -10,9 +10,24 @@ export type NavItemContent = {
   group?: "primary" | "secondary";
   previewImage?: string;
   previewImageAr?: string;
+  imageAlt?: string;
   focalPoint?: string;
   visible?: boolean;
   mobileVisible?: boolean;
+};
+
+export type LifestyleSlotData = {
+  url: string;
+  mobileUrl?: string;
+  alt: string;
+  focalPoint?: string;
+};
+
+export type LifestyleSlots = {
+  topLeft?: LifestyleSlotData | null;
+  topRight?: LifestyleSlotData | null;
+  bottomLeft?: LifestyleSlotData | null;
+  bottomRight?: LifestyleSlotData | null;
 };
 
 export type HomeContent = {
@@ -63,7 +78,18 @@ export type HomeContent = {
   inquiryProjects: { id: string; name: string }[];
   openingProjects?: { name: string; location: string; image: string }[];
   openingProject?: { name: string; location: string; image: string; images?: string[] };
-  lifestyle: { enabled?: boolean; eyebrow: string; title: string; image?: string; alt?: string; ctaLabel?: string; ctaUrl?: string };
+  lifestyle: {
+    enabled?: boolean;
+    eyebrow: string;
+    title: string;
+    image?: string;
+    alt?: string;
+    ctaEnabled?: boolean;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    ctaExternal?: boolean;
+    slots?: LifestyleSlots;
+  };
   stats: CompanyStatItem[];
   statsSection?: StatsSectionContent;
   newsJournalSection?: HomeJournalSectionContent;
@@ -98,11 +124,13 @@ export type HomeContent = {
     menuImage: string;
     menuImageAlt: string;
     menuImageFocalPoint?: string;
+    menuFontSizeDesktop?: string;
+    menuFontSizeMobile?: string;
     socials: { label: string; url: string; svgIcon?: string }[];
     seoTitle: string;
     seoDescription: string;
   };
-  common: { projects: string; explore: string; menu: string; close: string; language: string; contact: string; rights: string; statsHeading?: string };
+  common: { projects: string; explore: string; menu: string; close: string; language: string; contact: string; rights: string; statsHeading?: string; morePages?: string };
   customSections?: PageSectionContent[];
   pageSectionsByPage?: Record<string, PageSectionContent[]>;
 };
@@ -282,6 +310,12 @@ export type ProjectDetailData = {
   nearbyLocations: NearbyLocationItem[];
   constructionUpdates: ConstructionUpdateItem[];
   visualTours?: ProjectVisualTourItem[];
+  virtualTour?: {
+    enabled: boolean;
+    url: string;
+    label: string;
+    description?: string;
+  };
   seoTitle?: string;
   seoDescription?: string;
   ogImageUrl?: string;

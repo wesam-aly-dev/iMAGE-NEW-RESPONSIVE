@@ -97,7 +97,16 @@ export default async function CareersAdminPage() {
             <tbody>
               {applications.map((app) => (
                 <tr key={app.id}>
-                  <td style={{ whiteSpace: "nowrap" }}>{app.createdAt.toLocaleString("en-GB")}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {app.referenceNumber && (
+                      <div style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: "var(--forest, #123026)" }}>
+                        {app.referenceNumber}
+                      </div>
+                    )}
+                    <div style={{ fontSize: "11px", color: "var(--muted, #666)" }}>
+                      {app.createdAt.toLocaleString("en-GB")}
+                    </div>
+                  </td>
                   <td>
                     <b>{app.fullName}</b>
                     <small>

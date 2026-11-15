@@ -4,7 +4,7 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { HomeContent } from "@/content/home";
+import { siteMedia, type HomeContent } from "@/content/home";
 import { SiteHeader } from "./site-header";
 import { Reveal } from "./motion-reveal";
 import { ProjectShowcase } from "./project-showcase";
@@ -18,12 +18,37 @@ import { HomeNewsJournal } from "./home-news-journal";
 
 import { HERO_TIMING } from "@/lib/hero-motion";
 
-function Media({ src, alt, priority = false }: { src?: string; alt?: string; priority?: boolean }) {
+function Media({
+  src,
+  alt,
+  priority = false,
+  focalPoint,
+  fallbackSrc,
+}: {
+  src?: string;
+  alt?: string;
+  priority?: boolean;
+  focalPoint?: string;
+  fallbackSrc?: string;
+}) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
+  const effectiveSrc = failed ? fallbackSrc : (src || fallbackSrc);
+  if (!effectiveSrc) {
     return <div className="mm-media-fallback" style={{ position: "absolute", inset: 0, backgroundColor: "#152a20" }} />;
   }
-  return <Image src={src} alt={alt ?? ""} fill priority={priority} sizes="100vw" onError={() => setFailed(true)} />;
+  return (
+    <Image
+      src={effectiveSrc}
+      alt={alt ?? ""}
+      fill
+      priority={priority}
+      sizes="(max-width: 900px) 100vw, 30vw"
+      style={focalPoint ? { objectPosition: focalPoint } : undefined}
+      onError={() => {
+        if (!failed) setFailed(true);
+      }}
+    />
+  );
 }
 
 function HeroMedia({ copy, playVideo }: { copy: HomeContent; playVideo: boolean }) {
@@ -316,12 +341,57 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   }, [isMobile, scrollYProgress]);
 
   if (copy.lifestyle.enabled === false) return null;
-  const images = [copy.lifestyle.image, copy.about.milestones[0]?.image, copy.projects[0]?.image, copy.projects[1]?.image].filter(Boolean) as string[];
+
+  // Resolve stable 4 slots:
+  // Slot 1: Top Left -> living-image-1 (y: a)
+  // Slot 2: Top Right -> living-image-2 (y: b)
+  // Slot 3: Bottom Left -> living-image-3 (y: a)
+  // Slot 4: Bottom Right -> living-image-4 (y: b)
+  const slotDefinitions = [
+    { key: "topLeft", slotClass: "living-image-1", y: a, data: copy.lifestyle.slots?.topLeft },
+    { key: "topRight", slotClass: "living-image-2", y: b, data: copy.lifestyle.slots?.topRight },
+    { key: "bottomLeft", slotClass: "living-image-3", y: a, data: copy.lifestyle.slots?.bottomLeft },
+    { key: "bottomRight", slotClass: "living-image-4", y: b, data: copy.lifestyle.slots?.bottomRight },
+  ];
+
+  // Active slots that have an image URL
+  const activeDesktopSlots = slotDefinitions.filter((s) => s.data && s.data.url);
+
+  // Fallback for tests or setups without slots:
+  const desktopItems = activeDesktopSlots.length > 0
+    ? activeDesktopSlots
+    : [copy.lifestyle.image, copy.about.milestones[0]?.image, copy.projects[0]?.image, copy.projects[1]?.image]
+        .filter(Boolean)
+        .map((src, i) => ({
+          key: `slot-${i}`,
+          slotClass: `living-image-${i + 1}`,
+          y: i % 2 ? b : a,
+          data: { url: src as string, alt: `${copy.lifestyle.title} ${i + 1}`, focalPoint: "center", mobileUrl: undefined },
+        }));
+
+  // Mobile carousel uses all active images (using mobile override when available)
+  const mobileSlides = desktopItems.map((item) => ({
+    src: item.data!.mobileUrl || item.data!.url,
+    alt: item.data!.alt || `${copy.lifestyle.title}`,
+    focalPoint: item.data!.focalPoint,
+  }));
 
   const ar = copy.locale === "ar";
   const defaultLabel = ar ? "اكتشف قصتنا" : "Discover Our Story";
   const ctaLabel = copy.lifestyle.ctaLabel || defaultLabel;
-  const ctaHref = isAboutPage ? "#about" : (copy.lifestyle.ctaUrl || `/${copy.locale}/about`);
+  const rawHref = (copy.lifestyle.ctaUrl || "/about").trim();
+  const isExternalCta = Boolean(copy.lifestyle.ctaExternal || /^https?:\/\//i.test(rawHref));
+  const showCta = copy.lifestyle.ctaEnabled !== false;
+
+  let ctaHref: string;
+  if (isAboutPage) {
+    ctaHref = "#about";
+  } else if (isExternalCta || rawHref.startsWith("#") || rawHref.startsWith("mailto:") || rawHref.startsWith("tel:")) {
+    ctaHref = rawHref;
+  } else {
+    const cleanPath = rawHref.replace(/^\/(?:en|ar)(?:\/|$)/, "/");
+    ctaHref = cleanPath.startsWith("/") ? `/${copy.locale}${cleanPath === "/" ? "" : cleanPath}` : `/${copy.locale}/${cleanPath}`;
+  }
 
   const handleTouchStart = (e: React.TouchEvent) => {
     mediaTouchStart.current = {
@@ -336,7 +406,7 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
     const dy = Math.abs(e.changedTouches[0].clientY - mediaTouchStart.current.y);
     if (Math.abs(dx) > 40 && dy < 50) {
       if ((!ar && dx < 0) || (ar && dx > 0)) {
-        setMobileActiveIndex((prev) => Math.min(prev + 1, images.length - 1));
+        setMobileActiveIndex((prev) => Math.min(prev + 1, mobileSlides.length - 1));
       } else {
         setMobileActiveIndex((prev) => Math.max(prev - 1, 0));
       }
@@ -347,43 +417,53 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   return (
     <section ref={ref} className="living-story" style={{ backgroundColor: `rgb(${copy.backgrounds.lifestyle})` }}>
       <div className="living-sticky">
-        {/* Desktop floating 4-image layout */}
+        {/* Desktop floating 4-image layout with stable slot assignments */}
         {!isMobile && (
           <>
-            {images.map((src, index) => (
-              <motion.div key={`${src}-${index}`} className={`living-image living-image-${index + 1}`} style={{ y: index % 2 ? b : a }}>
-                <Media src={src} />
+            {desktopItems.map((item) => (
+              <motion.div key={item.key} className={`living-image ${item.slotClass}`} style={{ y: item.y }}>
+                <Media
+                  src={item.data!.url}
+                  alt={item.data!.alt}
+                  focalPoint={item.data!.focalPoint}
+                  fallbackSrc={siteMedia.lifestyle}
+                />
               </motion.div>
             ))}
           </>
         )}
 
         {/* Mobile scroll-driven multi-image frame with crossfade & touch swipe */}
-        {isMobile && (
+        {isMobile && mobileSlides.length > 0 && (
           <div
             className="living-mobile-carousel"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
             <div className="living-mobile-frame">
-              {images.map((src, index) => (
+              {mobileSlides.map((slide, index) => (
                 <motion.div
-                  key={`${src}-${index}`}
+                  key={`${slide.src}-${index}`}
                   className="living-mobile-slide"
                   style={{
                     opacity: reduce ? (index === mobileActiveIndex ? 1 : 0) : mobileOpacities[index] || op3,
                   }}
                 >
-                  <Media src={src} alt={`${copy.lifestyle.title} ${index + 1}`} />
+                  <Media
+                    src={slide.src}
+                    alt={slide.alt}
+                    focalPoint={slide.focalPoint}
+                    fallbackSrc={siteMedia.lifestyle}
+                  />
                 </motion.div>
               ))}
               <div className="living-mobile-counter" aria-hidden="true">
-                <span>{String(mobileActiveIndex + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}</span>
+                <span>{String(mobileActiveIndex + 1).padStart(2, "0")} / {String(mobileSlides.length).padStart(2, "0")}</span>
               </div>
             </div>
             {/* Dots */}
             <div className="living-mobile-dots" aria-hidden="true">
-              {images.map((_, i) => (
+              {mobileSlides.map((_, i) => (
                 <button
                   key={i}
                   type="button"
@@ -401,12 +481,31 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
           <BrandMark />
           <p className="kicker">{copy.lifestyle.eyebrow}</p>
           <h2>{copy.lifestyle.title}</h2>
-          <div className="living-cta-wrap">
-            <Link href={ctaHref} className="living-cta-btn" aria-label={ctaLabel}>
-              <span>{ctaLabel}</span>
-              <span className="living-cta-arrow" aria-hidden="true">{ar ? "←" : "→"}</span>
-            </Link>
-          </div>
+          {showCta && (
+            <div className="living-cta-wrap">
+              {isExternalCta ? (
+                <a
+                  href={ctaHref}
+                  className="living-cta-btn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={ctaLabel}
+                >
+                  <span>{ctaLabel}</span>
+                  <span className="living-cta-arrow" aria-hidden="true">{ar ? "←" : "→"}</span>
+                </a>
+              ) : (
+                <Link
+                  href={ctaHref}
+                  className="living-cta-btn"
+                  aria-label={ctaLabel}
+                >
+                  <span>{ctaLabel}</span>
+                  <span className="living-cta-arrow" aria-hidden="true">{ar ? "←" : "→"}</span>
+                </Link>
+              )}
+            </div>
+          )}
           <div className="living-mini-stats">
             {copy.stats.slice(0, 3).map((s) => (
               <span key={s.label}>

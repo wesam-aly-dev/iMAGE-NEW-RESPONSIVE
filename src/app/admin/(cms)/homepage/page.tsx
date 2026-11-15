@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { ActionForm } from "@/components/admin/action-form";
 import { Bilingual, Check, Field, RgbField, Textarea } from "@/components/admin/fields";
 import { MediaField } from "@/components/admin/media-field";
+import { LifestyleStoryImagesEditor } from "@/components/admin/lifestyle-story-images-editor";
+import { LifestyleCtaEditor } from "@/components/admin/lifestyle-cta-editor";
 import { saveHomepage } from "../../actions";
 import { TypographyFields } from "@/components/admin/typography-fields";
 export default async function HomepageAdmin(){const [h,allAssets,allProjects,allArticles]=await Promise.all([prisma.homepage.findUniqueOrThrow({where:{id:"homepage"},include:{stats:{orderBy:{sortOrder:"asc"}}}}),prisma.mediaAsset.findMany({orderBy:{createdAt:"desc"},select:{id:true,url:true,filename:true,mimeType:true,size:true,kind:true}}),prisma.project.findMany({where:{status:"PUBLISHED"},orderBy:[{featured:"desc"},{featuredOrder:"asc"},{nameEn:"asc"}]}),prisma.newsArticle.findMany({where:{status:"PUBLISHED"},orderBy:[{publicationDate:"desc"}]})]);const videos=allAssets.filter(asset=>asset.kind==="VIDEO");const images=allAssets.filter(asset=>asset.kind==="IMAGE");let currentManualArticleIds:string[]=[];try{currentManualArticleIds=JSON.parse(h.statsJournalArticleIds||"[]");}catch{currentManualArticleIds=[];}return <><header className="page-head"><div><p>Homepage</p><h1>Homepage content</h1><span>Uploads are added to Media immediately. Click Save Homepage to publish field assignments.</span></div></header><ActionForm action={saveHomepage} className="admin-form" submitLabel="Save Homepage">
@@ -97,7 +99,201 @@ export default async function HomepageAdmin(){const [h,allAssets,allProjects,all
       </div>
     </div>
   </section>
-  <section className="panel"><div className="section-title"><h2>Lifestyle</h2><Check name="lifestyleEnabled" label="Visible" checked={h.lifestyleEnabled}/></div><Bilingual base="lifestyleEyebrow" label="Eyebrow" en={h.lifestyleEyebrowEn} ar={h.lifestyleEyebrowAr}/><Bilingual base="lifestyleTitle" label="Heading" en={h.lifestyleTitleEn} ar={h.lifestyleTitleAr} required/><Field name="lifestyleMediaUrl" label="Image URL" value={h.lifestyleMediaUrl}/><Bilingual base="lifestyleMediaAlt" label="Image alt text" en={h.lifestyleMediaAltEn} ar={h.lifestyleMediaAltAr}/><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "12px" }}><Bilingual base="lifestyleCtaLabel" label="CTA Button Label" en={(h as any).lifestyleCtaLabelEn || "Discover Our Story"} ar={(h as any).lifestyleCtaLabelAr || "اكتشف قصتنا"}/><Field name="lifestyleCtaUrl" label="CTA Destination URL" value={(h as any).lifestyleCtaUrl || "/about"}/></div></section>
+  <section className="panel" id="about-our-story">
+    <div className="section-title">
+      <h2>About / Our Story — Living Narrative</h2>
+      <Check name="lifestyleEnabled" label="Section Visible" checked={h.lifestyleEnabled}/>
+    </div>
+    <p className="hint">
+      The homepage living story statement (&ldquo;Beyond the building&rdquo;) featuring the central brand wordmark, narrative headline, and four surrounding architectural image frames.
+    </p>
+    <Bilingual base="lifestyleEyebrow" label="Eyebrow" en={h.lifestyleEyebrowEn} ar={h.lifestyleEyebrowAr}/>
+    <Bilingual base="lifestyleTitle" label="Heading" en={h.lifestyleTitleEn} ar={h.lifestyleTitleAr} required/>
+    
+    <LifestyleCtaEditor
+      initialEnabled={(h as any).lifestyleCtaEnabled !== false}
+      initialLabelEn={(h as any).lifestyleCtaLabelEn || "Discover Our Story"}
+      initialLabelAr={(h as any).lifestyleCtaLabelAr || "اكتشف قصتنا"}
+      initialUrl={(h as any).lifestyleCtaUrl || "/about"}
+      initialExternal={(h as any).lifestyleCtaExternal || false}
+      publishedProjects={allProjects.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        nameEn: p.nameEn,
+        nameAr: p.nameAr,
+      }))}
+    />
+
+    <LifestyleStoryImagesEditor
+      initialSlots={{
+        topLeft: {
+          id: "topLeft",
+          labelEn: "Top Left Image Frame",
+          labelAr: "إطار أعلى اليسار",
+          positionDescription: "Upper-left floating architectural frame (desktop left: 7vw, top: 9vh)",
+          fieldPrefix: "lifestyleTopLeft",
+          imageUrl: (h as any).lifestyleTopLeftImageUrl ?? h.lifestyleMediaUrl ?? "",
+          imageAltEn: (h as any).lifestyleTopLeftImageAltEn ?? h.lifestyleMediaAltEn ?? "Image Developments architectural community",
+          imageAltAr: (h as any).lifestyleTopLeftImageAltAr ?? h.lifestyleMediaAltAr ?? "مجتمع معماري متكامل من إيمدج للتطوير العقاري",
+          focalPoint: (h as any).lifestyleTopLeftFocalPoint || "center",
+          mobileImageUrl: (h as any).lifestyleTopLeftMobileImageUrl || "",
+        },
+        topRight: {
+          id: "topRight",
+          labelEn: "Top Right Image Frame",
+          labelAr: "إطار أعلى اليمين",
+          positionDescription: "Upper-right floating architectural frame (desktop right: 7vw, top: 10vh)",
+          fieldPrefix: "lifestyleTopRight",
+          imageUrl: (h as any).lifestyleTopRightImageUrl ?? "",
+          imageAltEn: (h as any).lifestyleTopRightImageAltEn ?? "Image Developments landscape and craft",
+          imageAltAr: (h as any).lifestyleTopRightImageAltAr ?? "الطبيعة والحرفية المعمارية في إيمدج",
+          focalPoint: (h as any).lifestyleTopRightFocalPoint || "center",
+          mobileImageUrl: (h as any).lifestyleTopRightMobileImageUrl || "",
+        },
+        bottomLeft: {
+          id: "bottomLeft",
+          labelEn: "Bottom Left Image Frame",
+          labelAr: "إطار أسفل اليسار",
+          positionDescription: "Lower-left floating architectural frame (desktop left: 14vw, bottom: 5vh)",
+          fieldPrefix: "lifestyleBottomLeft",
+          imageUrl: (h as any).lifestyleBottomLeftImageUrl ?? "",
+          imageAltEn: (h as any).lifestyleBottomLeftImageAltEn ?? "Image Developments interior space",
+          imageAltAr: (h as any).lifestyleBottomLeftImageAltAr ?? "المساحات الداخلية في إيمدج",
+          focalPoint: (h as any).lifestyleBottomLeftFocalPoint || "center",
+          mobileImageUrl: (h as any).lifestyleBottomLeftMobileImageUrl || "",
+        },
+        bottomRight: {
+          id: "bottomRight",
+          labelEn: "Bottom Right Image Frame",
+          labelAr: "إطار أسفل اليمين",
+          positionDescription: "Lower-right floating architectural frame (desktop right: 15vw, bottom: 6vh)",
+          fieldPrefix: "lifestyleBottomRight",
+          imageUrl: (h as any).lifestyleBottomRightImageUrl ?? "",
+          imageAltEn: (h as any).lifestyleBottomRightImageAltEn ?? "Image Developments destination overview",
+          imageAltAr: (h as any).lifestyleBottomRightImageAltAr ?? "إطلالة على وجهات إيمدج للتطوير العقاري",
+          focalPoint: (h as any).lifestyleBottomRightFocalPoint || "center",
+          mobileImageUrl: (h as any).lifestyleBottomRightMobileImageUrl || "",
+        },
+      }}
+      mediaAssets={images}
+    />
+  </section>
+  <section className="panel">
+    <div className="section-title">
+      <h2>Company Statistics (Our Story Metrics)</h2>
+    </div>
+    <p className="hint">
+      These key metrics are displayed prominently in the Our Story / Beyond the Building section on the homepage and track record summaries across the site.
+    </p>
+
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "16px" }}>
+      {h.stats && h.stats.length > 0 ? (
+        h.stats.map((stat, idx) => (
+          <div
+            key={stat.id}
+            style={{
+              padding: "16px",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              background: "rgba(0, 0, 0, 0.02)",
+            }}
+          >
+            <input type="hidden" name="statId" value={stat.id} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <span style={{ fontWeight: 600, fontSize: "14px" }}>Metric #{idx + 1}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                <Check name={`statVisible_${stat.id}`} label="Visible" checked={stat.visible !== false} />
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <label htmlFor={`statOrder_${stat.id}`} style={{ fontSize: "12px", color: "var(--text-muted)" }}>Order</label>
+                  <input
+                    type="number"
+                    id={`statOrder_${stat.id}`}
+                    name={`statOrder_${stat.id}`}
+                    defaultValue={stat.sortOrder ?? idx}
+                    style={{ width: "60px", padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border)" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div className="field">
+                <label htmlFor={`statValueEn_${stat.id}`}>Metric Value (EN)</label>
+                <input
+                  type="text"
+                  id={`statValueEn_${stat.id}`}
+                  name={`statValueEn_${stat.id}`}
+                  defaultValue={stat.valueEn}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor={`statValueAr_${stat.id}`}>Metric Value (AR)</label>
+                <input
+                  type="text"
+                  id={`statValueAr_${stat.id}`}
+                  name={`statValueAr_${stat.id}`}
+                  defaultValue={stat.valueAr}
+                  dir="rtl"
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div className="field">
+                <label htmlFor={`statUnitEn_${stat.id}`}>Unit / Suffix (EN - optional)</label>
+                <input
+                  type="text"
+                  id={`statUnitEn_${stat.id}`}
+                  name={`statUnitEn_${stat.id}`}
+                  defaultValue={stat.unitEn || ""}
+                  placeholder="e.g. +, M, Sqm"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor={`statUnitAr_${stat.id}`}>Unit / Suffix (AR - optional)</label>
+                <input
+                  type="text"
+                  id={`statUnitAr_${stat.id}`}
+                  name={`statUnitAr_${stat.id}`}
+                  defaultValue={stat.unitAr || ""}
+                  dir="rtl"
+                  placeholder="مثال: +، م²، كم"
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="field">
+                <label htmlFor={`statLabelEn_${stat.id}`}>Description Label (EN)</label>
+                <input
+                  type="text"
+                  id={`statLabelEn_${stat.id}`}
+                  name={`statLabelEn_${stat.id}`}
+                  defaultValue={stat.labelEn}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor={`statLabelAr_${stat.id}`}>Description Label (AR)</label>
+                <input
+                  type="text"
+                  id={`statLabelAr_${stat.id}`}
+                  name={`statLabelAr_${stat.id}`}
+                  defaultValue={stat.labelAr}
+                  dir="rtl"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="hint">No company metrics found. Run the demo seeding script to populate initial statistics.</p>
+      )}
+    </div>
+  </section>
   <section className="panel">
     <div className="section-title">
       <h2>News & Journal section</h2>

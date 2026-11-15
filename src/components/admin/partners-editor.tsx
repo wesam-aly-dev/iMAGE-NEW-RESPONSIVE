@@ -30,7 +30,7 @@ export function PartnersEditor({initialPartners,assets}:{initialPartners:Partner
       </div>
       <button type="button" className="secondary" onClick={()=>setPartners(c=>[...c,blank()])}>+ Add partner</button>
     </div>
-    {partners.length===0&&<div className="panel empty">No partners yet. Click "+ Add partner" above to add one.</div>}
+    {partners.length===0&&<div className="panel empty">No partners yet. Click &ldquo;+ Add partner&rdquo; above to add one.</div>}
     {partners.map((partner,index)=><section className="panel magazine-panel" key={partner.id}>
       <input type="hidden" name="partnerId" value={partner.id}/>
       <div className="section-title magazine-title">

@@ -2728,41 +2728,52 @@ html[dir="rtl"] .about-page::after {
 .living-cta-wrap {
   display: flex;
   justify-content: center;
-  margin-top: 30px;
+  margin-top: 28px;
 }
 
 .living-cta-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 13px 28px;
-  border-radius: 30px;
-  background: var(--forest);
+  min-height: 48px;
+  max-height: 56px;
+  padding: 14px 32px;
+  border-radius: 9999px;
+  background: #152a20;
   color: #ffffff;
-  border: 1px solid var(--forest);
-  font-size: 13.5px;
-  font-weight: 600;
+  border: 1px solid #152a20;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-  box-shadow: 0 4px 16px rgba(42, 69, 52, 0.12);
+  cursor: pointer;
+  box-sizing: border-box;
+  box-shadow: 0 4px 16px rgba(21, 42, 32, 0.14);
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
 
 .living-cta-btn:hover {
-  background: var(--peach);
-  color: var(--forest);
-  border-color: var(--peach);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(182, 111, 82, 0.22);
+  background: #223d2f;
+  border-color: #223d2f;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(21, 42, 32, 0.22);
+}
+
+.living-cta-btn:active {
+  transform: scale(0.98);
 }
 
 .living-cta-btn:focus-visible {
-  outline: 2px solid var(--peach);
+  outline: 2px solid var(--peach, #b36f55);
   outline-offset: 3px;
 }
 
 .living-cta-arrow {
-  transition: transform 0.25s ease;
+  display: inline-block;
   font-size: 15px;
+  line-height: 1;
+  transition: transform 200ms ease;
 }
 
 .living-cta-btn:hover .living-cta-arrow {
@@ -2771,6 +2782,17 @@ html[dir="rtl"] .about-page::after {
 
 .arabic .living-cta-btn:hover .living-cta-arrow {
   transform: translateX(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .living-cta-btn,
+  .living-cta-btn:active,
+  .living-cta-arrow,
+  .living-cta-btn:hover .living-cta-arrow,
+  .arabic .living-cta-btn:hover .living-cta-arrow {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 .editorial-view-all-link {

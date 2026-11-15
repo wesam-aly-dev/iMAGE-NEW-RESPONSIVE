@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { ActionForm } from "@/components/admin/action-form";
 import { Bilingual, Field } from "@/components/admin/fields";
 import { SocialLinksEditor } from "@/components/admin/social-links-editor";
+import { NotificationTestForm } from "@/components/admin/notification-test-form";
+import { getResolvedNotificationSettings } from "@/lib/notifications/email-service";
 import { saveSettings } from "../../actions";
 
 export default async function Settings() {
@@ -10,13 +12,15 @@ export default async function Settings() {
     include: { socialLinks: { orderBy: { sortOrder: "asc" } } },
   });
 
+  const notificationMeta = await getResolvedNotificationSettings();
+
   return (
     <>
       <header className="page-head">
         <div>
           <p>Global content</p>
           <h1>Settings</h1>
-          <span>Manage company identity, hotline, working hours, and brochure downloads.</span>
+          <span>Manage company identity, hotline, form notifications, working hours, and brochure downloads.</span>
         </div>
       </header>
 
@@ -36,6 +40,42 @@ export default async function Settings() {
             ar={s.workingHoursAr ?? "الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م"}
           />
           <Bilingual base="address" label="Address" en={s.addressEn} ar={s.addressAr} />
+        </section>
+
+        <section className="panel">
+          <h2>Form & Lead Notifications / إشعارات النماذج والمبيعات</h2>
+          <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px", marginBottom: "16px" }}>
+            Configure destination mailboxes for website inquiries, callback requests, and job applications.
+          </p>
+          <div className="checkbox-row">
+            <input
+              type="checkbox"
+              id="notificationEmailEnabled"
+              name="notificationEmailEnabled"
+              defaultChecked={s.notificationEmailEnabled !== false}
+            />
+            <label htmlFor="notificationEmailEnabled">
+              Enable automated email notifications for incoming website form submissions
+            </label>
+          </div>
+          <Field
+            name="notificationRecipientEmail"
+            label="Inquiries recipient email / بريد استلام استفسارات العملاء"
+            type="email"
+            value={s.notificationRecipientEmail || ""}
+          />
+          <Field
+            name="careersRecipientEmail"
+            label="Careers recipient email / بريد استلام طلبات التوظيف (leave empty to reuse inquiries recipient)"
+            type="email"
+            value={s.careersRecipientEmail || ""}
+          />
+          <Field
+            name="notificationSenderEmail"
+            label="Sender email override (From header, e.g. notifications@imagedevelopments.com)"
+            type="email"
+            value={s.notificationSenderEmail || ""}
+          />
         </section>
 
         <SocialLinksEditor initialLinks={s.socialLinks} />
@@ -104,6 +144,19 @@ export default async function Settings() {
           <Bilingual base="menuMediaAlt" label="Image alt text" en={s.menuMediaAltEn} ar={s.menuMediaAltAr} />
         </section>
       </ActionForm>
+
+      <section className="panel" style={{ marginTop: "32px" }}>
+        <h2>Test Email Connectivity / اختبار اتصال خادم البريد</h2>
+        <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px" }}>
+          Verify that outgoing notification emails reach the designated recipient inbox.
+        </p>
+        <NotificationTestForm
+          defaultEmail={s.notificationRecipientEmail || ""}
+          lastTestAt={s.lastNotificationTestAt ? s.lastNotificationTestAt.toISOString() : null}
+          lastTestResult={s.lastNotificationTestResult}
+          smtpConfigured={notificationMeta.smtpConfigured || notificationMeta.hasResend}
+        />
+      </section>
     </>
   );
 }

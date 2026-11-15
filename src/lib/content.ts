@@ -195,6 +195,7 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
         external: n.external,
         group: (n.group as "primary" | "secondary") || "primary",
         previewImage: (locale === "ar" && n.previewImageUrlAr) ? n.previewImageUrlAr : (n.previewImageUrl || undefined),
+        imageAlt: pick(locale, (n as any).previewImageAltEn ?? "", (n as any).previewImageAltAr ?? "") || pick(locale, n.labelEn, n.labelAr),
         focalPoint: n.focalPoint || "center",
         visible: n.visible,
         mobileVisible: (n as any).mobileVisible !== false,
@@ -253,15 +254,94 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
     inquiryProjects: openingProjects.map(p => ({ id: p.id, name: pick(locale, p.nameEn, p.nameAr) })),
     openingProjects: openingProjects.map(p => ({ name: pick(locale, p.nameEn, p.nameAr), location: pick(locale, p.locationEn, p.locationAr), image: p.coverImageUrl })),
     openingProject: currentProject ? { name: pick(locale, currentProject.nameEn, currentProject.nameAr), location: pick(locale, currentProject.locationEn, currentProject.locationAr), image: currentProject.coverImageUrl, images: openingImages } : undefined,
-    lifestyle: {
-      enabled: home.lifestyleEnabled,
-      eyebrow: pick(locale, home.lifestyleEyebrowEn, home.lifestyleEyebrowAr),
-      title: pick(locale, home.lifestyleTitleEn, home.lifestyleTitleAr),
-      image: home.lifestyleMediaUrl,
-      alt: pick(locale, home.lifestyleMediaAltEn, home.lifestyleMediaAltAr),
-      ctaLabel: pick(locale, (home as any).lifestyleCtaLabelEn ?? (locale === "ar" ? "اكتشف قصتنا" : "Discover Our Story"), (home as any).lifestyleCtaLabelAr ?? "اكتشف قصتنا") || (locale === "ar" ? "اكتشف قصتنا" : "Discover Our Story"),
-      ctaUrl: (home as any).lifestyleCtaUrl || `/${locale}/about`,
-    },
+    lifestyle: (() => {
+      const legacySlot1 = home.lifestyleMediaUrl || siteMedia.lifestyle;
+      const legacySlot2 = home.aboutMilestones?.[0]?.imageUrl || siteMedia.detail;
+      const legacySlot3 = projects[0]?.coverImageUrl || siteMedia.projects[0];
+      const legacySlot4 = projects[1]?.coverImageUrl || siteMedia.projects[1];
+
+      const resolveSlot = (
+        imgUrl: string | null | undefined,
+        legacyFallback: string,
+        altEn: string | null | undefined,
+        altAr: string | null | undefined,
+        focalPoint: string | null | undefined,
+        mobileUrl: string | null | undefined
+      ) => {
+        if (imgUrl !== undefined && imgUrl !== null) {
+          const trimmed = imgUrl.trim();
+          if (trimmed === "" || trimmed === "none") {
+            return null; // Explicitly removed
+          }
+          return {
+            url: trimmed,
+            mobileUrl: mobileUrl?.trim() || undefined,
+            alt: pick(locale, altEn ?? "", altAr ?? "") || pick(locale, home.lifestyleMediaAltEn, home.lifestyleMediaAltAr),
+            focalPoint: focalPoint || "center",
+          };
+        }
+        return {
+          url: legacyFallback,
+          mobileUrl: mobileUrl?.trim() || undefined,
+          alt: pick(locale, altEn ?? "", altAr ?? "") || pick(locale, home.lifestyleMediaAltEn, home.lifestyleMediaAltAr),
+          focalPoint: focalPoint || "center",
+        };
+      };
+
+      const topLeftSlot = resolveSlot(
+        (home as any).lifestyleTopLeftImageUrl,
+        legacySlot1,
+        (home as any).lifestyleTopLeftImageAltEn,
+        (home as any).lifestyleTopLeftImageAltAr,
+        (home as any).lifestyleTopLeftFocalPoint,
+        (home as any).lifestyleTopLeftMobileImageUrl
+      );
+      const topRightSlot = resolveSlot(
+        (home as any).lifestyleTopRightImageUrl,
+        legacySlot2,
+        (home as any).lifestyleTopRightImageAltEn,
+        (home as any).lifestyleTopRightImageAltAr,
+        (home as any).lifestyleTopRightFocalPoint,
+        (home as any).lifestyleTopRightMobileImageUrl
+      );
+      const bottomLeftSlot = resolveSlot(
+        (home as any).lifestyleBottomLeftImageUrl,
+        legacySlot3,
+        (home as any).lifestyleBottomLeftImageAltEn,
+        (home as any).lifestyleBottomLeftImageAltAr,
+        (home as any).lifestyleBottomLeftFocalPoint,
+        (home as any).lifestyleBottomLeftMobileImageUrl
+      );
+      const bottomRightSlot = resolveSlot(
+        (home as any).lifestyleBottomRightImageUrl,
+        legacySlot4,
+        (home as any).lifestyleBottomRightImageAltEn,
+        (home as any).lifestyleBottomRightImageAltAr,
+        (home as any).lifestyleBottomRightFocalPoint,
+        (home as any).lifestyleBottomRightMobileImageUrl
+      );
+
+      const rawCtaUrl = ((home as any).lifestyleCtaUrl || "/about").trim();
+      const isExternalCta = Boolean((home as any).lifestyleCtaExternal || /^(?:https?:|mailto:|tel:)/i.test(rawCtaUrl));
+
+      return {
+        enabled: home.lifestyleEnabled,
+        eyebrow: pick(locale, home.lifestyleEyebrowEn, home.lifestyleEyebrowAr),
+        title: pick(locale, home.lifestyleTitleEn, home.lifestyleTitleAr),
+        image: topLeftSlot?.url || home.lifestyleMediaUrl,
+        alt: pick(locale, home.lifestyleMediaAltEn, home.lifestyleMediaAltAr),
+        ctaEnabled: (home as any).lifestyleCtaEnabled !== false,
+        ctaLabel: pick(locale, (home as any).lifestyleCtaLabelEn ?? (locale === "ar" ? "اكتشف قصتنا" : "Discover Our Story"), (home as any).lifestyleCtaLabelAr ?? "اكتشف قصتنا") || (locale === "ar" ? "اكتشف قصتنا" : "Discover Our Story"),
+        ctaUrl: rawCtaUrl,
+        ctaExternal: isExternalCta,
+        slots: {
+          topLeft: topLeftSlot,
+          topRight: topRightSlot,
+          bottomLeft: bottomLeftSlot,
+          bottomRight: bottomRightSlot,
+        },
+      };
+    })(),
     stats: home.stats.filter(s => s.visible !== false).map(s => ({ value: pick(locale, s.valueEn, s.valueAr), label: pick(locale, s.labelEn, s.labelAr), unit: pick(locale, s.unitEn ?? "", s.unitAr ?? "") || undefined })),
     statsSection: {
       enabled: home.statsEnabled,
@@ -330,14 +410,26 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
       footerContactHeading: pick(locale, settings.footerContactHeadingEn ?? "Contact", settings.footerContactHeadingAr ?? "تواصل معنا"),
       callbackEnabled: settings.callbackEnabled !== false,
       callbackLabel: pick(locale, settings.callbackLabelEn ?? "Request a Call Back", settings.callbackLabelAr ?? "طلب معاودة الاتصال"),
-      menuImage: settings.menuMediaUrl,
-      menuImageAlt: pick(locale, settings.menuMediaAltEn, settings.menuMediaAltAr),
+      menuImage: settings.menuMediaUrl || "/images/menu.jpg",
+      menuImageAlt: pick(locale, settings.menuMediaAltEn, settings.menuMediaAltAr) || (locale === "ar" ? "العمارة المعاصرة في إيمدج" : "Image Developments architecture"),
       menuImageFocalPoint: settings.menuMediaFocalPoint || "center",
+      menuFontSizeDesktop: (settings as any).menuFontSizeDesktop || "1.125rem",
+      menuFontSizeMobile: (settings as any).menuFontSizeMobile || "1rem",
       socials: settings.socialLinks.map((item) => ({ label: item.name, url: item.url, svgIcon: item.svgIcon })),
       seoTitle: pick(locale, settings.defaultSeoTitleEn, settings.defaultSeoTitleAr),
       seoDescription: pick(locale, settings.defaultSeoDescriptionEn, settings.defaultSeoDescriptionAr),
     },
-    common: { projects: pick(locale, home.projectsHeadingEn, home.projectsHeadingAr), explore: pick(locale, home.projectsExploreEn, home.projectsExploreAr), menu: locale === "ar" ? "افتح القائمة" : "Open menu", close: locale === "ar" ? "أغلق القائمة" : "Close menu", language: locale === "ar" ? "English" : "العربية", contact: locale === "ar" ? "تواصل معنا" : "Get in touch", rights: pick(locale, settings.copyrightEn, settings.copyrightAr), statsHeading: pick(locale, home.statsHeadingEn, home.statsHeadingAr) },
+    common: {
+      projects: pick(locale, home.projectsHeadingEn, home.projectsHeadingAr),
+      explore: pick(locale, home.projectsExploreEn, home.projectsExploreAr),
+      menu: locale === "ar" ? "افتح القائمة" : "Open menu",
+      close: locale === "ar" ? "أغلق القائمة" : "Close menu",
+      language: locale === "ar" ? "English" : "العربية",
+      contact: locale === "ar" ? "تواصل معنا" : "Get in touch",
+      rights: pick(locale, settings.copyrightEn, settings.copyrightAr),
+      statsHeading: pick(locale, home.statsHeadingEn, home.statsHeadingAr),
+      morePages: pick(locale, (settings as any).morePagesLabelEn ?? "More Pages", (settings as any).morePagesLabelAr ?? "المزيد من الصفحات") || (locale === "ar" ? "المزيد من الصفحات" : "More Pages"),
+    },
     pageSectionsByPage: pageSections.reduce<Record<string, PageSectionContent[]>>((groups, section) => { (groups[section.page] ??= []).push({ id: section.id, kind: normalizeBlockKind(section.kind), settings: parseBlockSettings(section.settings), layout: normalizePageSectionLayout(section.layout), eyebrow: pick(locale, section.eyebrowEn, section.eyebrowAr), title: pick(locale, section.titleEn, section.titleAr), body: pick(locale, section.bodyEn, section.bodyAr), image: section.imageUrl ?? undefined, imageAlt: pick(locale, section.imageAltEn, section.imageAltAr), ctaLabel: pick(locale, section.ctaLabelEn, section.ctaLabelAr) || undefined, ctaUrl: section.ctaUrl ?? undefined, backgroundRgb: section.backgroundRgb }); return groups }, {}),
   };
 });
@@ -653,6 +745,19 @@ export const getProjectDetailContent = cache(async (locale: Locale, slug: string
       nearbyLocations,
       constructionUpdates,
       visualTours,
+      virtualTour: (() => {
+        const enabled = Boolean((project as any).virtualTourEnabled);
+        const rawUrl = locale === "ar" && (project as any).virtualTourUrlAr
+          ? (project as any).virtualTourUrlAr
+          : (project as any).virtualTourUrl;
+        if (!enabled || !rawUrl || !rawUrl.trim()) return undefined;
+        return {
+          enabled: true,
+          url: rawUrl.trim(),
+          label: pick(locale, (project as any).virtualTourLabelEn || "Explore Virtual Tour", (project as any).virtualTourLabelAr || "استكشف الجولة الافتراضية"),
+          description: pick(locale, (project as any).virtualTourDescriptionEn ?? "", (project as any).virtualTourDescriptionAr ?? "") || undefined,
+        };
+      })(),
       seoTitle: pick(locale, project.seoTitleEn ?? `${project.nameEn} — Image Developments`, project.seoTitleAr ?? `${project.nameAr} — إيمدج للتطوير العقاري`),
       seoDescription: pick(locale, project.seoDescriptionEn ?? project.shortDescriptionEn, project.seoDescriptionAr ?? project.shortDescriptionAr),
       ogImageUrl: project.ogImageUrl ?? project.coverImageUrl,

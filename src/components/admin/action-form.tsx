@@ -17,6 +17,8 @@ export function ActionForm({
   const [isDirty, setIsDirty] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const isSubmittingRef = useRef(false);
 
   // When form changes, mark dirty
   const handleFormChange = () => {
@@ -27,6 +29,7 @@ export function ActionForm({
   useEffect(() => {
     if (state.success && !pending) {
       setIsDirty(false);
+      isSubmittingRef.current = false;
       setLastSavedTime(
         new Date().toLocaleTimeString([], {
           hour: "2-digit",
@@ -36,6 +39,23 @@ export function ActionForm({
       );
     }
   }, [state.success, pending]);
+
+  // When an error occurs, scroll error into view smoothly
+  useEffect(() => {
+    if (state.error && !pending) {
+      isSubmittingRef.current = false;
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [state.error, pending]);
+
+  // Prevent duplicate submissions while pending or in-flight
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (pending || isSubmittingRef.current) {
+      e.preventDefault();
+      return;
+    }
+    isSubmittingRef.current = true;
+  };
 
   // Warn before navigating away if there are unsaved edits
   useEffect(() => {
@@ -55,15 +75,20 @@ export function ActionForm({
       action={formAction}
       className={className}
       onChange={handleFormChange}
+      onSubmit={handleSubmit}
     >
       {!pending && state.error && (
-        <div className="form-message error" role="alert" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <div ref={errorRef} className="form-message error" role="alert" style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "14px 16px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }}>
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{state.error}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <strong style={{ fontSize: "14px" }}>Could not save changes</strong>
+            <span style={{ fontSize: "13px" }}>{state.error}</span>
+            <small style={{ color: "#7f1d1d", fontSize: "11px", marginTop: "2px" }}>All entered values remain intact in the form. Please resolve the issue above and try again.</small>
+          </div>
         </div>
       )}
       {!pending && state.success && (
@@ -80,13 +105,17 @@ export function ActionForm({
       {children}
 
       {!pending && state.error && (
-        <div className="form-message error" role="alert" style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <div className="form-message error" role="alert" style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "14px 16px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", marginTop: "16px" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }}>
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{state.error}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <strong style={{ fontSize: "14px" }}>Could not save changes</strong>
+            <span style={{ fontSize: "13px" }}>{state.error}</span>
+            <small style={{ color: "#7f1d1d", fontSize: "11px", marginTop: "2px" }}>All entered values remain intact in the form. Please resolve the issue above and try again.</small>
+          </div>
         </div>
       )}
       {!pending && state.success && (

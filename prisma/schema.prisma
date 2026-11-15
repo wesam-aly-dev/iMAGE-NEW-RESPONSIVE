@@ -194,9 +194,35 @@ model Homepage {
   lifestyleMediaUrl      String
   lifestyleMediaAltEn    String
   lifestyleMediaAltAr    String
+  lifestyleCtaEnabled    Boolean             @default(true)
   lifestyleCtaLabelEn    String?             @default("Discover Our Story")
   lifestyleCtaLabelAr    String?             @default("اكتشف قصتنا")
   lifestyleCtaUrl        String?             @default("/about")
+  lifestyleCtaExternal   Boolean             @default(false)
+
+  lifestyleTopLeftImageUrl        String?
+  lifestyleTopLeftImageAltEn      String?   @default("Image Developments architectural community")
+  lifestyleTopLeftImageAltAr      String?   @default("مجتمع معماري متكامل من إيمدج للتطوير العقاري")
+  lifestyleTopLeftFocalPoint      String?   @default("center")
+  lifestyleTopLeftMobileImageUrl  String?
+
+  lifestyleTopRightImageUrl       String?
+  lifestyleTopRightImageAltEn     String?   @default("Image Developments landscape and craft")
+  lifestyleTopRightImageAltAr     String?   @default("الطبيعة والحرفية المعمارية في إيمدج")
+  lifestyleTopRightFocalPoint     String?   @default("center")
+  lifestyleTopRightMobileImageUrl String?
+
+  lifestyleBottomLeftImageUrl       String?
+  lifestyleBottomLeftImageAltEn     String? @default("Image Developments interior space")
+  lifestyleBottomLeftImageAltAr     String? @default("المساحات الداخلية في إيمدج")
+  lifestyleBottomLeftFocalPoint     String? @default("center")
+  lifestyleBottomLeftMobileImageUrl String?
+
+  lifestyleBottomRightImageUrl       String?
+  lifestyleBottomRightImageAltEn     String? @default("Image Developments destination overview")
+  lifestyleBottomRightImageAltAr     String? @default("إطلالة على وجهات إيمدج للتطوير العقاري")
+  lifestyleBottomRightFocalPoint     String? @default("center")
+  lifestyleBottomRightMobileImageUrl String?
   statsEnabled           Boolean             @default(true)
   statsBackgroundRgb     String              @default("255, 255, 255")
   statsLabelEn           String?             @default("About Image")
@@ -422,6 +448,13 @@ model Project {
   heroTitleAr         String?
   heroDescriptionEn   String?
   heroDescriptionAr   String?
+  virtualTourEnabled       Boolean   @default(false)
+  virtualTourUrl           String?
+  virtualTourUrlAr         String?
+  virtualTourLabelEn       String?   @default("Explore Virtual Tour")
+  virtualTourLabelAr       String?   @default("استكشف الجولة الافتراضية")
+  virtualTourDescriptionEn String?
+  virtualTourDescriptionAr String?
   publishedAt         DateTime?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
@@ -698,6 +731,8 @@ model NavigationItem {
   group             String  @default("primary")
   previewImageUrl   String?
   previewImageUrlAr String?
+  previewImageAltEn String?
+  previewImageAltAr String?
   focalPoint        String  @default("center")
 }
 
@@ -728,6 +763,10 @@ model GlobalSettings {
   menuMediaAltEn          String
   menuMediaAltAr          String
   menuMediaFocalPoint     String       @default("center")
+  morePagesLabelEn        String?      @default("More Pages")
+  morePagesLabelAr        String?      @default("المزيد من الصفحات")
+  menuFontSizeDesktop     String?      @default("1.125rem")
+  menuFontSizeMobile      String?      @default("1rem")
   descriptionEn           String?
   descriptionAr           String?
   mapUrl                  String?
@@ -740,6 +779,12 @@ model GlobalSettings {
   callbackEnabled         Boolean      @default(true)
   callbackLabelEn         String?      @default("Request a Call Back")
   callbackLabelAr         String?      @default("طلب معاودة الاتصال")
+  notificationEmailEnabled   Boolean   @default(true)
+  notificationRecipientEmail String?   @default("info@imagedevelopments.com")
+  careersRecipientEmail      String?
+  notificationSenderEmail    String?
+  lastNotificationTestAt     DateTime?
+  lastNotificationTestResult String?
   updatedAt               DateTime     @updatedAt
 }
 
@@ -766,21 +811,30 @@ model CareerJob {
 }
 
 model CareerApplication {
-  id         String     @id @default(cuid())
-  jobId      String?
-  job        CareerJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  jobTitle   String
-  fullName   String
-  email      String
-  phone      String
-  cvUrl      String
-  cvFilename String
-  notes      String?
-  status     String     @default("NEW") // NEW | REVIEWED | SHORTLISTED | REJECTED
-  createdAt  DateTime   @default(now())
+  id                   String     @id @default(cuid())
+  referenceNumber      String?    @unique
+  jobId                String?
+  job                  CareerJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  jobTitle             String
+  fullName             String
+  email                String
+  phone                String
+  cvUrl                String
+  cvFilename           String
+  notes                String?
+  status               String     @default("NEW") // NEW | REVIEWED | SHORTLISTED | REJECTED
+  idempotencyKey       String?    @unique
+  notificationStatus   String     @default("PENDING") // PENDING | DELIVERED | FAILED | BLOCKED | SKIPPED
+  notificationError    String?
+  notificationAttempts Int        @default(0)
+  notificationSentAt   DateTime?
+  isRead               Boolean    @default(false)
+  isArchived           Boolean    @default(false)
+  createdAt            DateTime   @default(now())
 
   @@index([createdAt])
   @@index([status])
+  @@index([isRead])
 }
 
 model SocialLink {
@@ -898,21 +952,62 @@ model ContactPage {
 }
 
 model ContactSubmission {
-  id          String   @id @default(cuid())
-  name        String
-  email       String
-  phone       String?
-  countryCode String?
-  subject     String
-  projectId   String?
-  status      String   @default("NEW")
-  notes       String?
-  message     String
-  locale      String   @default("en")
-  createdAt   DateTime @default(now())
+  id                   String    @id @default(cuid())
+  referenceNumber      String?   @unique
+  name                 String
+  email                String
+  phone                String?
+  countryCode          String?
+  subject              String
+  projectId            String?
+  projectName          String?
+  unitType             String?
+  formType             String    @default("GENERAL_CONTACT")
+  formVariant          String?
+  sourcePage           String?
+  sourceCta            String?
+  consentAccepted      Boolean   @default(true)
+  marketingConsent     Boolean   @default(false)
+  consentVersion       String?   @default("v1")
+  idempotencyKey       String?   @unique
+  status               String    @default("NEW")
+  notes                String?
+  message              String
+  locale               String    @default("en")
+  notificationStatus   String    @default("PENDING")
+  notificationError    String?
+  notificationAttempts Int       @default(0)
+  notificationSentAt   DateTime?
+  isRead               Boolean   @default(false)
+  isArchived           Boolean   @default(false)
+  createdAt            DateTime  @default(now())
 
   @@index([createdAt])
   @@index([status])
+  @@index([isRead])
+  @@index([formType])
+}
+
+model NotificationJob {
+  id             String    @id @default(cuid())
+  jobType        String    // LEAD_INQUIRY | CAREER_APPLICATION | TEST_EMAIL
+  targetId       String?
+  recipientEmail String
+  senderEmail    String?
+  subject        String
+  payload        String    // JSON snapshot
+  status         String    @default("PENDING") // PENDING | DELIVERED | FAILED | BLOCKED
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  nextAttemptAt  DateTime  @default(now())
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([targetId])
 }
 
 /// Ordered page-builder blocks: custom content sections and positioned built-in sections.
