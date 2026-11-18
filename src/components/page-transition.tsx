@@ -86,8 +86,9 @@ function getMontageAssets(copy: HomeContent, isProjects?: boolean) {
   }
 
   const centerImage =
-    copy.openingProject?.image ||
     copy.hero.image ||
+    copy.hero.poster ||
+    copy.openingProject?.image ||
     copy.projects[0]?.image ||
     "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=2400&q=88";
 
@@ -153,9 +154,7 @@ export function PageTransitionProvider({
     pathname === "/ar/projects" ||
     pathname === "/projects";
 
-  const isCinematicPage =
-    (isHomepage && copy.opening?.enabled !== false) ||
-    (isProjectsPage && copy.projectsOpening?.enabled !== false);
+  const isCinematicPage = isHomepage && copy.opening?.enabled === true;
 
   const { centerImage, panels } = getMontageAssets(copy, isProjectsPage);
 
@@ -264,13 +263,12 @@ export function PageTransitionProvider({
           document.body.style.overflow = prevOverflow;
         };
       } else {
-        // Direct entry to inner page: Brief dignified brand reveal without 5-panel montage (~380ms)
-        setState("revealing");
-        const tInnerDone = setTimeout(() => {
-          hasCompletedInitialIntro = true;
-          setState("idle");
-        }, 380);
-        return () => clearTimeout(tInnerDone);
+        // Direct entry without opening experience: Reveal immediately with no scroll lock or delays
+        hasCompletedInitialIntro = true;
+        setState("idle");
+        setIntroPhase("done");
+        setIsInitialCinematic(false);
+        document.body.style.overflow = "";
       }
     }
   }, [isCinematicPage, prefersReducedMotion]);

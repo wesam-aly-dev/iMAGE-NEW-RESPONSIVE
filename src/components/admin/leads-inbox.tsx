@@ -8,6 +8,7 @@ import {
   markLeadReadStatus,
   toggleLeadArchive,
   retryLeadNotificationAction,
+  dispatchPendingNotificationsAction,
 } from "@/app/admin/actions";
 
 export interface SerializedLead {
@@ -163,6 +164,18 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
     }
   };
 
+  const handleProcessOutbox = () => {
+    setActionFeedback({ id: "outbox", message: "Processing pending outbox jobs..." });
+    startTransition(async () => {
+      const res = await dispatchPendingNotificationsAction();
+      if (res.success) {
+        setActionFeedback({ id: "outbox", message: res.success, isError: false });
+      } else {
+        setActionFeedback({ id: "outbox", message: res.error || "Failed to process outbox", isError: true });
+      }
+    });
+  };
+
   const exportData = filteredLeads.map((l) => ({
     createdAt: l.createdAt,
     name: l.name,
@@ -184,6 +197,8 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
         return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, backgroundColor: "#fef3c7", color: "#b45309" }}>Unit & Plan</span>;
       case "REGISTER_INTEREST":
         return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, backgroundColor: "#f3e8ff", color: "#7e22ce" }}>Interest</span>;
+      case "CAREER_APPLICATION":
+        return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, backgroundColor: "#ede9fe", color: "#6d28d9" }}>Career App</span>;
       default:
         return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, backgroundColor: "#f3f4f6", color: "#374151" }}>General</span>;
     }
@@ -194,10 +209,28 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
       case "DELIVERED":
         return (
           <span
-            title="Email delivered to configured administrator mailbox"
+            title="Email delivery confirmed"
             style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, backgroundColor: "#dcfce7", color: "#15803d" }}
           >
-            &check; Sent
+            &check; Delivered
+          </span>
+        );
+      case "ACCEPTED":
+        return (
+          <span
+            title="Email accepted by provider for delivery"
+            style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, backgroundColor: "#dbeafe", color: "#1d4ed8" }}
+          >
+            &check; Accepted by Provider
+          </span>
+        );
+      case "PROCESSING":
+        return (
+          <span
+            title="Notification currently in progress"
+            style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, backgroundColor: "#e0e7ff", color: "#4338ca" }}
+          >
+            Processing...
           </span>
         );
       case "BLOCKED": {
@@ -378,10 +411,32 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
             <option value="PROJECT_INQUIRY">Project Inquiry</option>
             <option value="UNIT_INQUIRY">Unit / Floor Plan</option>
             <option value="REGISTER_INTEREST">Register Interest</option>
+            <option value="CAREER_APPLICATION">Career Applications</option>
           </select>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={handleProcessOutbox}
+            disabled={isPending}
+            style={{
+              padding: "7px 14px",
+              fontSize: "12px",
+              fontWeight: 600,
+              backgroundColor: "#2a4534",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isPending ? "not-allowed" : "pointer",
+              opacity: isPending ? 0.7 : 1,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>Process Outbox</span>
+          </button>
           <LeadExport leads={exportData} />
         </div>
       </div>
@@ -800,6 +855,40 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               </div>
             </div>
 
+            {selectedLead.formType === "CAREER_APPLICATION" && (
+              <div
+                style={{
+                  marginBottom: "20px",
+                  padding: "12px 16px",
+                  backgroundColor: "#f5f3ff",
+                  border: "1px solid #ddd6fe",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  color: "#5b21b6",
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>Linked Career Vacancy Application</div>
+                <div>
+                  This inquiry corresponds to a candidate application submitted through the Careers portal.
+                  Candidate CV files remain securely stored in private storage.
+                </div>
+                <div style={{ marginTop: "8px" }}>
+                  <a
+                    href="/admin/careers"
+                    style={{
+                      display: "inline-block",
+                      color: "#6d28d9",
+                      fontWeight: 600,
+                      textDecoration: "underline",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Open Careers Portal to Review Application & Download CV →
+                  </a>
+                </div>
+              </div>
+            )}
+
             {/* Notification Delivery Box */}
             <div style={{ backgroundColor: "#ffffff", border: "1px solid var(--line, #dfe4dc)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -833,7 +922,7 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                     cursor: "pointer",
                   }}
                 >
-                  Retry Email Notification Dispatch &rarr;
+                  Retry Email Notification Dispatch →
                 </button>
               </div>
             </div>

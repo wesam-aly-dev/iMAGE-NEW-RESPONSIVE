@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({
@@ -24,10 +24,14 @@ import {
   markLeadReadStatus,
   toggleLeadArchive,
   retryLeadNotificationAction,
+  retryCareerNotificationAction,
+  dispatchPendingNotificationsAction,
 } from "@/app/admin/actions";
 import {
   getResolvedNotificationSettings,
   dispatchNotificationJob,
+  processPendingNotificationJobs,
+  retryNotificationJob,
 } from "./notifications/email-service";
 import { getHomepageContent } from "./content";
 import { buildLeadEmail, buildCareerEmail } from "./notifications/templates";
@@ -36,6 +40,7 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
   const createdLeadIds: string[] = [];
   const createdAppIds: string[] = [];
   const createdJobIds: string[] = [];
+  const createdCvPaths: string[] = [];
 
   beforeEach(() => {
     mockRequireAdmin.mockReset();
@@ -59,9 +64,43 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
         where: { id: { in: createdJobIds } },
       });
     }
+    for (const cvPath of createdCvPaths) {
+      try {
+        const fs = await import("fs/promises");
+        await fs.unlink(cvPath);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      await prisma.globalSettings.update({
+        where: { id: "global" },
+        data: {
+          notificationRecipientEmail: "awessam311@gmail.com",
+          notificationEmailEnabled: true,
+        },
+      });
+    } catch {
+      // ignore
+    }
   });
 
   describe("A. Homepage About / Our Story Image Slots Workflow", () => {
+    let originalHomepageState: any = null;
+
+    beforeAll(async () => {
+      originalHomepageState = await prisma.homepage.findUnique({ where: { id: "homepage" } });
+    });
+
+    afterAll(async () => {
+      if (originalHomepageState) {
+        await prisma.homepage.update({
+          where: { id: "homepage" },
+          data: originalHomepageState,
+        });
+      }
+    });
+
     it("persists all 4 distinct image slots with focal points and localized alt text", async () => {
       const homeBefore = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
 
@@ -450,6 +489,469 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
       await expect(
         saveHomepage({}, new FormData())
       ).rejects.toThrow("Unauthorized");
+    });
+  });
+
+  describe("C. Form-by-Form Comprehensive Submissions & Outbox Integration", () => {
+    it("1. Homepage Callback Form (Arabic): persists in DB, generates INQ reference, and creates BLOCKED notification job", async () => {
+      const fd = new FormData();
+      fd.set("name", "طارق المحمودي");
+      fd.set("phone", "1011223344");
+      fd.set("countryCode", "EG:+20");
+      fd.set("locale", "ar");
+      fd.set("enquiryType", "callback");
+      fd.set("sourcePage", "/");
+      fd.set("sourceCta", "hero-callback");
+      fd.set("consent", "on");
+
+      const res = await submitContact({ status: "idle" }, fd);
+      expect(res.status).toBe("success");
+      expect(res.message).toMatch(/INQ-2026-\d+/);
+
+      const lead = await prisma.contactSubmission.findFirst({
+        where: { name: "طارق المحمودي" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(lead).toBeDefined();
+      createdLeadIds.push(lead!.id);
+
+      expect(lead!.formType).toBe("CALLBACK");
+      expect(lead!.sourcePage).toBe("/");
+      expect(lead!.sourceCta).toBe("hero-callback");
+      expect(lead!.locale).toBe("ar");
+      expect(lead!.notificationStatus).toBe("BLOCKED");
+      expect(lead!.notificationError).toContain("SMTP credentials not configured in environment");
+
+      const job = await prisma.notificationJob.findFirst({
+        where: { targetId: lead!.id },
+      });
+      expect(job).toBeDefined();
+      createdJobIds.push(job!.id);
+      expect(job!.jobType).toBe("LEAD_INQUIRY");
+      expect(job!.status).toBe("BLOCKED");
+      expect(job!.lastError).toContain("SMTP credentials not configured in environment");
+    });
+
+    it("2. Header Callback Popup (English): verifies distinct source CTA and DB storage", async () => {
+      const fd = new FormData();
+      fd.set("name", "David Mitchell");
+      fd.set("phone", "1022334455");
+      fd.set("countryCode", "EG:+20");
+      fd.set("locale", "en");
+      fd.set("enquiryType", "callback");
+      fd.set("sourcePage", "/about");
+      fd.set("sourceCta", "header-callback");
+      fd.set("consent", "on");
+
+      const res = await submitContact({ status: "idle" }, fd);
+      expect(res.status).toBe("success");
+
+      const lead = await prisma.contactSubmission.findFirst({
+        where: { name: "David Mitchell" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(lead).toBeDefined();
+      createdLeadIds.push(lead!.id);
+
+      expect(lead!.formType).toBe("CALLBACK");
+      expect(lead!.sourcePage).toBe("/about");
+      expect(lead!.sourceCta).toBe("header-callback");
+    });
+
+    it("3. Project Register Interest Form: verifies project linkage by slug and REGISTER_INTEREST classification", async () => {
+      const fd = new FormData();
+      fd.set("name", "Hany Rashed");
+      fd.set("email", "hany.rashed@example.com");
+      fd.set("phone", "1033445566");
+      fd.set("countryCode", "EG:+20");
+      fd.set("locale", "en");
+      fd.set("projectId", "aera");
+      fd.set("enquiryType", "register_interest");
+      fd.set("sourcePage", "/projects/aera");
+      fd.set("sourceCta", "register-interest-modal");
+      fd.set("consent", "on");
+
+      const res = await submitContact({ status: "idle" }, fd);
+      expect(res.status).toBe("success");
+
+      const lead = await prisma.contactSubmission.findFirst({
+        where: { email: "hany.rashed@example.com" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(lead).toBeDefined();
+      createdLeadIds.push(lead!.id);
+
+      expect(lead!.formType).toBe("REGISTER_INTEREST");
+      expect(lead!.projectName).toBe("Aera");
+      expect(lead!.sourcePage).toBe("/projects/aera");
+
+      const job = await prisma.notificationJob.findFirst({
+        where: { targetId: lead!.id },
+      });
+      expect(job).toBeDefined();
+      createdJobIds.push(job!.id);
+    });
+
+    it("4. Unit Inquiry Form: captures specific unitType and links to project", async () => {
+      const fd = new FormData();
+      fd.set("name", "منى زكي");
+      fd.set("phone", "1044556677");
+      fd.set("countryCode", "EG:+20");
+      fd.set("locale", "ar");
+      fd.set("projectId", "aera");
+      fd.set("enquiryType", "unit");
+      fd.set("unitType", "3-Bedroom Duplex Penthouse");
+      fd.set("sourcePage", "/projects/aera");
+      fd.set("consent", "on");
+
+      const res = await submitContact({ status: "idle" }, fd);
+      expect(res.status).toBe("success");
+
+      const lead = await prisma.contactSubmission.findFirst({
+        where: { name: "منى زكي" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(lead).toBeDefined();
+      createdLeadIds.push(lead!.id);
+
+      expect(lead!.formType).toBe("UNIT_INQUIRY");
+      expect(lead!.unitType).toBe("3-Bedroom Duplex Penthouse");
+      expect(lead!.projectName).toBe("إيرا");
+      expect(lead!.locale).toBe("ar");
+    });
+
+    it("5. Career Application: persists application, safely stores CV in private storage, and creates linked lead in CMS Inbox", async () => {
+      const fd = new FormData();
+      fd.set("fullName", "Nour El-Sherif");
+      fd.set("email", "nour.architect@example.com");
+      fd.set("phone", "+20 100 888 7766");
+      fd.set("jobTitle", "Senior Project Architect");
+      fd.set("locale", "en");
+      fd.set("notes", "10+ years experience in luxury residential towers.");
+      const fakeCv = new File(["%PDF-1.4 Mock CV Content"], "nour-cv.pdf", { type: "application/pdf" });
+      fd.set("cv", fakeCv);
+
+      const res = await submitCareerApplication({ status: "idle" }, fd);
+      expect(res.status).toBe("success");
+      expect(res.message).toMatch(/APP-2026-\d+/);
+
+      const app = await prisma.careerApplication.findFirst({
+        where: { email: "nour.architect@example.com" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(app).toBeDefined();
+      createdAppIds.push(app!.id);
+      if (app!.cvUrl) createdCvPaths.push(app!.cvUrl);
+
+      expect(app!.fullName).toBe("Nour El-Sherif");
+      expect(app!.jobTitle).toBe("Senior Project Architect");
+      expect(app!.cvFilename).toBe("nour-cv.pdf");
+      expect(app!.cvUrl).toContain("private-storage/cvs");
+
+      // Verify linked ContactSubmission exists in Leads Inbox
+      const linkedLead = await prisma.contactSubmission.findFirst({
+        where: { referenceNumber: app!.referenceNumber },
+      });
+      expect(linkedLead).toBeDefined();
+      createdLeadIds.push(linkedLead!.id);
+
+      expect(linkedLead!.formType).toBe("CAREER_APPLICATION");
+      expect(linkedLead!.sourcePage).toBe("/careers");
+      expect(linkedLead!.notes).toContain(app!.id);
+
+      // Verify Notification Job targets careers recipient
+      const job = await prisma.notificationJob.findFirst({
+        where: { targetId: app!.id },
+      });
+      expect(job).toBeDefined();
+      createdJobIds.push(job!.id);
+      expect(job!.jobType).toBe("CAREER_APPLICATION");
+    });
+  });
+
+  describe("D. Provider Failure Simulation, Outbox Dispatcher, and Admin Retries", () => {
+    it("retries a blocked/failed lead notification via admin action and increments attempt count", async () => {
+      // Create a test lead with blocked status
+      const lead = await prisma.contactSubmission.create({
+        data: {
+          referenceNumber: "INQ-2026-RETRY1",
+          name: "Retry Test Lead",
+          email: "retry@example.com",
+          phone: "+20 1000000001",
+          countryCode: "EG:+20",
+          subject: "Test Retry Inquiry",
+          message: "Retry test message",
+          formType: "GENERAL_CONTACT",
+          status: "NEW",
+          locale: "en",
+          notificationStatus: "BLOCKED",
+          notificationAttempts: 1,
+        },
+      });
+      createdLeadIds.push(lead.id);
+
+      const job = await prisma.notificationJob.create({
+        data: {
+          jobType: "LEAD_INQUIRY",
+          targetId: lead.id,
+          recipientEmail: "leads@imagedevelopments.com",
+          senderEmail: "notifications@imagedevelopments.com",
+          subject: "Test Retry",
+          payload: JSON.stringify({
+            referenceNumber: lead.referenceNumber,
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+          }),
+          status: "BLOCKED",
+          attempts: 1,
+        },
+      });
+      createdJobIds.push(job.id);
+
+      // Execute retry action
+      const retryRes = await retryLeadNotificationAction(lead.id);
+      expect(retryRes.success || retryRes.error).toBeDefined();
+
+      const updatedLead = await prisma.contactSubmission.findUnique({
+        where: { id: lead.id },
+      });
+      expect(updatedLead!.notificationAttempts).toBeGreaterThanOrEqual(2);
+    });
+
+    it("retries a blocked/failed career application notification via admin action", async () => {
+      const app = await prisma.careerApplication.create({
+        data: {
+          referenceNumber: "APP-2026-RETRY1",
+          fullName: "Career Retry Test",
+          email: "career.retry@example.com",
+          phone: "+20 1000000002",
+          jobTitle: "Design Director",
+          cvUrl: "private-storage/cvs/test.pdf",
+          cvFilename: "test.pdf",
+          status: "NEW",
+          notificationStatus: "BLOCKED",
+          notificationAttempts: 1,
+        },
+      });
+      createdAppIds.push(app.id);
+
+      const job = await prisma.notificationJob.create({
+        data: {
+          jobType: "CAREER_APPLICATION",
+          targetId: app.id,
+          recipientEmail: "hr@imagedevelopments.com",
+          senderEmail: "notifications@imagedevelopments.com",
+          subject: "Career Retry Test",
+          payload: JSON.stringify({
+            referenceNumber: app.referenceNumber,
+            fullName: app.fullName,
+            email: app.email,
+            phone: app.phone,
+            jobTitle: app.jobTitle,
+          }),
+          status: "BLOCKED",
+          attempts: 1,
+        },
+      });
+      createdJobIds.push(job.id);
+
+      const retryRes = await retryCareerNotificationAction(app.id);
+      expect(retryRes.success || retryRes.error).toBeDefined();
+
+      const updatedApp = await prisma.careerApplication.findUnique({
+        where: { id: app.id },
+      });
+      expect(updatedApp!.notificationAttempts).toBeGreaterThanOrEqual(2);
+    });
+
+    it("dispatches pending outbox queue safely using processPendingNotificationJobs", async () => {
+      const outboxRes = await processPendingNotificationJobs(5);
+      expect(outboxRes).toBeDefined();
+      expect(typeof outboxRes.processed).toBe("number");
+      expect(typeof outboxRes.succeeded).toBe("number");
+      expect(typeof outboxRes.failed).toBe("number");
+      expect(typeof outboxRes.blocked).toBe("number");
+
+      const actionRes = await dispatchPendingNotificationsAction();
+      expect(actionRes.success?.toLowerCase()).toContain("processed");
+    });
+  });
+
+  describe("E. Responsive Email Templates: Arabic RTL, English LTR, and Security Sanitization", () => {
+    it("renders Arabic RTL lead email template with proper direction and localized labels", () => {
+      const email = buildLeadEmail(
+        {
+          referenceNumber: "INQ-2026-AR001",
+          formType: "UNIT_INQUIRY",
+          name: "كريم عبد العزيز",
+          email: "karim@example.com",
+          phone: "1011112222",
+          countryCode: "+20",
+          subject: "استفسار عن وحدة في مشروع إيرا",
+          message: "هل الدوبلكس متاح في المرحلة الأولى؟",
+          projectName: "إيرا",
+          unitType: "دوبلكس جاردن",
+          sourcePage: "/ar/projects/aera",
+          locale: "ar",
+          consentAccepted: true,
+          marketingConsent: true,
+          createdAt: "2026-11-15T10:00:00.000Z",
+        },
+        "https://imagedevelopments.com"
+      );
+
+      expect(email.subject).toContain("INQ-2026-AR001");
+      expect(email.subject).toContain("إيرا");
+      expect(email.html).toContain('dir="rtl"');
+      expect(email.html).toContain('lang="ar"');
+      expect(email.html).toContain("إشعار استفسار جديد");
+      expect(email.html).toContain("الرقم المرجعي");
+      expect(email.html).toContain("المشروع المطلوب");
+      expect(email.html).toContain("نوع الوحدة");
+      expect(email.html).toContain("دوبلكس جاردن");
+      expect(email.html).toContain("Cairo Time");
+      expect(email.html).toContain("عرض الاستفسار في لوحة التحكم");
+
+      expect(email.text).toContain("الرقم المرجعي: INQ-2026-AR001");
+      expect(email.text).toContain("الاسم بالكامل: كريم عبد العزيز");
+      expect(email.text).toContain("المشروع المطلوب: إيرا");
+      expect(email.text).toContain("نوع الوحدة: دوبلكس جاردن");
+    });
+
+    it("renders English LTR lead email template and escapes malicious HTML tags", () => {
+      const maliciousInput = {
+        referenceNumber: "INQ-2026-SEC01",
+        formType: "GENERAL_CONTACT" as const,
+        name: "<script>alert('xss')</script> John",
+        email: "john@example.com",
+        phone: "1022223333",
+        countryCode: "+20",
+        subject: "Security Test <img src=x onerror=alert(1)>",
+        message: "Hello <b>world</b> <iframe src='evil.com'></iframe>",
+        projectName: "Aera",
+        sourcePage: "/contact",
+        locale: "en",
+        consentAccepted: true,
+        marketingConsent: false,
+        createdAt: "2026-11-15T11:00:00.000Z",
+      };
+
+      const email = buildLeadEmail(maliciousInput, "https://imagedevelopments.com");
+
+      expect(email.html).toContain('dir="ltr"');
+      expect(email.html).toContain('lang="en"');
+      expect(email.html).not.toContain("<script>alert('xss')</script>");
+      expect(email.html).toContain("&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;");
+      expect(email.html).not.toContain("<iframe src='evil.com'>");
+      expect(email.html).toContain("&lt;iframe src=&#039;evil.com&#039;&gt;&lt;/iframe&gt;");
+
+      expect(email.text).toContain("John");
+      expect(email.text).toContain("https://imagedevelopments.com/admin/leads?id=INQ-2026-SEC01");
+    });
+
+    it("renders Career Application email template with link to careers portal and no raw CV exposure", () => {
+      const email = buildCareerEmail(
+        {
+          referenceNumber: "APP-2026-CAR01",
+          jobTitle: "Lead Interior Designer",
+          fullName: "Laila El-Kady",
+          email: "laila@example.com",
+          phone: "+20 100 555 6677",
+          cvUrl: "/Users/secret/private-storage/cvs/random-uuid.pdf",
+          cvFilename: "laila-portfolio.pdf",
+          notes: "Award-winning designer with 8 years in hospitality.",
+          createdAt: "2026-11-15T12:00:00.000Z",
+        },
+        "https://imagedevelopments.com"
+      );
+
+      expect(email.subject).toBe("New Application — Lead Interior Designer — APP-2026-CAR01");
+      expect(email.html).toContain("Lead Interior Designer");
+      expect(email.html).toContain("Laila El-Kady");
+      expect(email.html).toContain("laila-portfolio.pdf");
+      expect(email.html).toContain("https://imagedevelopments.com/admin/careers");
+      // Must not expose local server filesystem path
+      expect(email.html).not.toContain("/Users/secret/private-storage/cvs/");
+
+      expect(email.text).toContain("Candidate Name: Laila El-Kady");
+      expect(email.text).toContain("Position: Lead Interior Designer");
+      expect(email.text).toContain("https://imagedevelopments.com/admin/careers");
+    });
+  });
+
+  describe("F. Career Application Validation & Duplicate Prevention", () => {
+    it("validates required fields and CV file constraints on career application", async () => {
+      // 1. Missing name & email
+      const fd1 = new FormData();
+      fd1.set("jobTitle", "Project Manager");
+      const res1 = await submitCareerApplication({ status: "idle" }, fd1);
+      expect(res1.status).toBe("error");
+      expect(res1.fields?.fullName).toBeDefined();
+      expect(res1.fields?.email).toBeDefined();
+
+      // 2. Disallowed CV file extension (.exe)
+      const fd2 = new FormData();
+      fd2.set("fullName", "Hacker Joe");
+      fd2.set("email", "joe@example.com");
+      fd2.set("phone", "+20 100 000 0000");
+      fd2.set("jobTitle", "IT Security");
+      const fakeExe = new File(["malicious"], "payload.exe", { type: "application/x-msdownload" });
+      fd2.set("cv", fakeExe);
+
+      const res2 = await submitCareerApplication({ status: "idle" }, fd2);
+      expect(res2.status).toBe("error");
+      expect(res2.fields?.cv).toMatch(/PDF.*Word|Word.*PDF/i);
+
+      // 3. File size limit (> 5MB)
+      const fd3 = new FormData();
+      fd3.set("fullName", "Heavy Uploader");
+      fd3.set("email", "heavy@example.com");
+      fd3.set("phone", "+20 100 000 0000");
+      fd3.set("jobTitle", "BIM Specialist");
+      const bigBlob = new Uint8Array(6 * 1024 * 1024);
+      const fakeBigFile = new File([bigBlob], "big-portfolio.pdf", { type: "application/pdf" });
+      fd3.set("cv", fakeBigFile);
+
+      const res3 = await submitCareerApplication({ status: "idle" }, fd3);
+      expect(res3.status).toBe("error");
+      expect(res3.fields?.cv).toContain("5");
+    });
+
+    it("verifies idempotency key prevents duplicate career application records and duplicate notification jobs", async () => {
+      const idempKey = `career-idemp-${Date.now()}`;
+      const build = () => {
+        const fd = new FormData();
+        fd.set("fullName", "Yasmine Fares");
+        fd.set("email", "yasmine@example.com");
+        fd.set("phone", "+20 100 444 3322");
+        fd.set("jobTitle", "Landscape Architect");
+        fd.set("locale", "en");
+        fd.set("idempotencyKey", idempKey);
+        const cv = new File(["Mock CV content"], "yasmine-cv.pdf", { type: "application/pdf" });
+        fd.set("cv", cv);
+        return fd;
+      };
+
+      const res1 = await submitCareerApplication({ status: "idle" }, build());
+      expect(res1.status).toBe("success");
+
+      const res2 = await submitCareerApplication({ status: "idle" }, build());
+      expect(res2.status).toBe("success");
+      expect(res2.message).toContain("already received");
+
+      const count = await prisma.careerApplication.count({
+        where: { idempotencyKey: idempKey },
+      });
+      expect(count).toBe(1);
+
+      const app = await prisma.careerApplication.findUnique({
+        where: { idempotencyKey: idempKey },
+      });
+      if (app) {
+        createdAppIds.push(app.id);
+        if (app.cvUrl) createdCvPaths.push(app.cvUrl);
+      }
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   getResolvedNotificationSettings,
 } from "@/lib/notifications/email-service";
 import type { FormType } from "@/lib/notifications/types";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function generateReferenceNumber(prefix: "INQ" | "APP"): string {
   const year = new Date().getFullYear();
@@ -29,6 +30,7 @@ export type ContactState = {
     marketingConsent?: boolean;
   };
 };
+
 const contactSchema = z.object({
   name: z.string().trim().min(2).max(100),
   email: z
@@ -111,13 +113,20 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
         : "Please agree to the Terms & Conditions and Privacy Policy to proceed.";
   }
 
-  // Dedicated Contact Page requires message field
+  // Dedicated General Inquiry Form requires email and message fields
   const isDedicatedContactPage =
     values.formVariant === "contact" ||
     values.sourcePage === "contact-page" ||
     values.sourceCta === "contact-page-form";
 
-  if (isDedicatedContactPage && (!values.message || values.message.length < 1)) {
+  if (isDedicatedContactPage && (!values.email || values.email.trim().length === 0)) {
+    fieldErrors.email =
+      values.locale === "ar"
+        ? "يرجى إدخال البريد الإلكتروني."
+        : "Please enter your email address.";
+  }
+
+  if (isDedicatedContactPage && (!values.message || values.message.trim().length === 0)) {
     fieldErrors.message =
       values.locale === "ar" ? "يرجى كتابة رسالة." : "Please enter a message.";
   }
@@ -132,37 +141,76 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
       fields: fieldErrors,
       values: preservedValues,
     };
-  
-  const ar=parsed.data.locale==="ar";
-  let project=null;
-  if(parsed.data.projectId && parsed.data.projectId !== "general" && parsed.data.projectId !== "all"){
-    project=await prisma.project.findFirst({where:{id:parsed.data.projectId,status:"PUBLISHED"},select:{id:true,nameEn:true,nameAr:true}});
-    if(!project)return{status:"error",message:ar?"يرجى اختيار مشروع متاح.":"Please select an available project.",fields:{projectId:"Invalid project"},values:preservedValues};
+
+  const ar = parsed.data.locale === "ar";
+
+  // Rate Limiting Protection (anti-spam / denial of wallet/quota)
+  let clientIp = "127.0.0.1";
+  try {
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for");
+    if (forwarded) clientIp = forwarded.split(",")[0].trim();
+    else if (h.get("x-real-ip")) clientIp = h.get("x-real-ip")!;
+  } catch {
+    // In testing or environments without headers() support, ignore
   }
-  
-  const [,callingCode]=parsed.data.countryCode.split(":");
-  let subject=ar?"استفسار عام":"General Enquiry";
-  if(project){
-    subject=ar?project.nameAr:project.nameEn;
-  } else if(parsed.data.enquiryType==="callback"){
-    subject=ar?"طلب معاودة الاتصال":"Request a Callback";
-  } else if(parsed.data.enquiryType==="visit"){
-    subject=ar?"طلب حجز موعد زيارة":"Private Visit Request";
+
+  const rateCheck = checkRateLimit("contact_form", `${clientIp}:${values.phone || "anon"}`, 15, 10 * 60 * 1000);
+  if (!rateCheck.allowed) {
+    return {
+      status: "error",
+      message: ar
+        ? `تم استلام عدة طلبات في وقت قصير. يرجى الانتظار ${rateCheck.resetInSeconds} ثانية قبل المحاولة مجدداً.`
+        : `Too many submissions received in a short time. Please wait ${rateCheck.resetInSeconds} seconds before trying again.`,
+      values: preservedValues,
+    };
   }
-  
-  const metaParts:string[]=[];
-  if(parsed.data.enquiryType)metaParts.push(`Type: ${parsed.data.enquiryType}`);
+
+  // Project resolution (support ID or Slug)
+  let project = null;
+  if (parsed.data.projectId && parsed.data.projectId !== "general" && parsed.data.projectId !== "all") {
+    project = await prisma.project.findFirst({
+      where: {
+        OR: [{ id: parsed.data.projectId }, { slug: parsed.data.projectId }],
+        status: "PUBLISHED",
+      },
+      select: { id: true, nameEn: true, nameAr: true },
+    });
+    if (!project)
+      return {
+        status: "error",
+        message: ar ? "يرجى اختيار مشروع متاح." : "Please select an available project.",
+        fields: { projectId: "Invalid project" },
+        values: preservedValues,
+      };
+  }
+
+  const [, callingCode] = parsed.data.countryCode.split(":");
+  let subject = ar ? "استفسار عام" : "General Enquiry";
+  if (project) {
+    subject = ar ? project.nameAr : project.nameEn;
+  } else if (parsed.data.enquiryType === "callback") {
+    subject = ar ? "طلب معاودة الاتصال" : "Request a Callback";
+  } else if (parsed.data.enquiryType === "visit") {
+    subject = ar ? "طلب حجز موعد زيارة" : "Private Visit Request";
+  } else if (parsed.data.enquiryType === "unit") {
+    subject = ar ? "استفسار عن وحدة" : "Unit Inquiry";
+  }
+
+  const metaParts: string[] = [];
+  if (parsed.data.enquiryType) metaParts.push(`Type: ${parsed.data.enquiryType}`);
   const unitVal = String(formData.get("unitType") ?? "").trim();
-  if(unitVal)metaParts.push(`Unit: ${unitVal}`);
-  if(parsed.data.sourcePage)metaParts.push(`Page: ${parsed.data.sourcePage}`);
-  if(parsed.data.sourceCta)metaParts.push(`CTA: ${parsed.data.sourceCta}`);
+  if (unitVal) metaParts.push(`Unit: ${unitVal}`);
+  if (parsed.data.sourcePage) metaParts.push(`Page: ${parsed.data.sourcePage}`);
+  if (parsed.data.sourceCta) metaParts.push(`CTA: ${parsed.data.sourceCta}`);
   metaParts.push(`Terms & Privacy: ${consentChecked ? "Accepted" : "Declined"}`);
-  if(marketingChecked)metaParts.push("Marketing: Opted-In");
-  const notes=metaParts.length?metaParts.join(" | "):null;
+  if (marketingChecked) metaParts.push("Marketing: Opted-In");
+  const notes = metaParts.length ? metaParts.join(" | ") : null;
 
   const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim() || undefined;
 
-  // Check idempotency if key was provided
+  // Check idempotency if key was provided: return previous reference cleanly without duplicate side effects
   if (idempotencyKey) {
     const existing = await prisma.contactSubmission.findUnique({
       where: { idempotencyKey },
@@ -192,69 +240,81 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
   const referenceNumber = generateReferenceNumber("INQ");
   const notificationSettings = await getResolvedNotificationSettings();
 
-  const submission = await prisma.$transaction(async (tx) => {
-    const created = await tx.contactSubmission.create({
-      data: {
+  let submission: { created: unknown; jobId: string };
+  try {
+    submission = await prisma.$transaction(async (tx) => {
+      const created = await tx.contactSubmission.create({
+        data: {
+          referenceNumber,
+          name: parsed.data.name,
+          email: parsed.data.email || "",
+          phone: `${callingCode} ${parsed.data.phone}`,
+          countryCode: parsed.data.countryCode,
+          projectId: project ? project.id : null,
+          projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
+          unitType: unitVal || null,
+          formType,
+          formVariant: values.formVariant || null,
+          sourcePage: values.sourcePage || null,
+          sourceCta: values.sourceCta || null,
+          consentAccepted: consentChecked,
+          marketingConsent: marketingChecked,
+          consentVersion: "v1",
+          idempotencyKey: idempotencyKey || null,
+          status: "NEW",
+          subject,
+          notes,
+          message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
+          locale: parsed.data.locale,
+          notificationStatus: "PENDING",
+        },
+      });
+
+      const jobPayload = {
         referenceNumber,
+        formType,
+        formVariant: values.formVariant || null,
         name: parsed.data.name,
         email: parsed.data.email || "",
-        phone: `${callingCode} ${parsed.data.phone}`,
-        countryCode: parsed.data.countryCode,
+        phone: parsed.data.phone,
+        countryCode: callingCode,
+        subject,
+        message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
         projectId: project ? project.id : null,
         projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
         unitType: unitVal || null,
-        formType,
-        formVariant: values.formVariant || null,
         sourcePage: values.sourcePage || null,
         sourceCta: values.sourceCta || null,
+        locale: parsed.data.locale,
         consentAccepted: consentChecked,
         marketingConsent: marketingChecked,
         consentVersion: "v1",
-        idempotencyKey: idempotencyKey || null,
-        status: "NEW",
-        subject,
-        notes,
-        message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
-        locale: parsed.data.locale,
-        notificationStatus: "PENDING",
-      },
-    });
+        createdAt: created.createdAt.toISOString(),
+      };
 
-    const jobPayload = {
-      referenceNumber,
-      formType,
-      formVariant: values.formVariant || null,
-      name: parsed.data.name,
-      email: parsed.data.email || "",
-      phone: parsed.data.phone,
-      countryCode: callingCode,
-      subject,
-      message: parsed.data.message || (ar ? "طلب معاودة الاتصال" : "Request a Call Back"),
-      projectId: project ? project.id : null,
-      projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
-      unitType: unitVal || null,
-      sourcePage: values.sourcePage || null,
-      sourceCta: values.sourceCta || null,
-      locale: parsed.data.locale,
-      consentAccepted: consentChecked,
-      marketingConsent: marketingChecked,
-      consentVersion: "v1",
-      createdAt: created.createdAt.toISOString(),
+      const job = await createNotificationJob(tx, {
+        jobType: "LEAD_INQUIRY",
+        targetId: created.id,
+        recipientEmail: notificationSettings.recipientEmail,
+        senderEmail: notificationSettings.senderEmail,
+        subject: `New Inquiry — ${project ? (ar ? project.nameAr : project.nameEn) : (formType === "CALLBACK" ? (ar ? "طلب معاودة الاتصال" : "Callback Request") : "General Inquiry")} — ${referenceNumber}`,
+        payload: jobPayload,
+      });
+
+      return { created, jobId: job.id };
+    });
+  } catch (dbErr) {
+    console.error("Database failure saving contact submission:", dbErr);
+    return {
+      status: "error",
+      message: ar
+        ? "تعذر حفظ استفسارك في قاعدة البيانات. يرجى المحاولة مرة أخرى."
+        : "Failed to record your inquiry. Please try again.",
+      values: preservedValues,
     };
+  }
 
-    const job = await createNotificationJob(tx, {
-      jobType: "LEAD_INQUIRY",
-      targetId: created.id,
-      recipientEmail: notificationSettings.recipientEmail,
-      senderEmail: notificationSettings.senderEmail,
-      subject: `New Inquiry — ${project ? (ar ? project.nameAr : project.nameEn) : "General Inquiry"} — ${referenceNumber}`,
-      payload: jobPayload,
-    });
-
-    return { created, jobId: job.id };
-  });
-
-  // Await notification dispatch before returning, while ensuring submission persistence is completely independent
+  // Await notification dispatch after transaction commits, so lead is safely stored regardless of mail provider outcome
   try {
     await dispatchNotificationJob(submission.jobId);
   } catch (err) {
@@ -328,6 +388,28 @@ export async function submitCareerApplication(
     };
   }
 
+  // Rate Limiting Protection for job applications
+  let clientIp = "127.0.0.1";
+  try {
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for");
+    if (forwarded) clientIp = forwarded.split(",")[0].trim();
+    else if (h.get("x-real-ip")) clientIp = h.get("x-real-ip")!;
+  } catch {
+    // Ignore in tests
+  }
+
+  const rateCheck = checkRateLimit("career_form", `${clientIp}:${phone || email || "anon"}`, 6, 15 * 60 * 1000);
+  if (!rateCheck.allowed) {
+    return {
+      status: "error",
+      message: ar
+        ? `تم تجاوز الحد المسموح من الطلبات. يرجى الانتظار ${rateCheck.resetInSeconds} ثانية قبل المحاولة مجدداً.`
+        : `Too many applications submitted. Please wait ${rateCheck.resetInSeconds} seconds before trying again.`,
+    };
+  }
+
   try {
     const fs = await import("fs/promises");
     const path = await import("path");
@@ -379,6 +461,29 @@ export async function submitCareerApplication(
           status: "NEW",
           idempotencyKey: idempotencyKey || null,
           notificationStatus: "PENDING",
+        },
+      });
+
+      // Linked entry in ContactSubmission so all submissions appear in the CMS Leads Inbox
+      // clearly classified as CAREER_APPLICATION, keeping the private CV securely in private storage
+      await tx.contactSubmission.create({
+        data: {
+          referenceNumber,
+          name: fullName,
+          email,
+          phone,
+          subject: `Job Application — ${jobTitle}`,
+          message: notes ? `Candidate Notes: ${notes}` : `Application submitted for position "${jobTitle}". CV file: ${originalName} (securely stored in Careers portal).`,
+          formType: "CAREER_APPLICATION",
+          formVariant: "careers",
+          sourcePage: "/careers",
+          sourceCta: jobId ? "vacancy-application" : "general-application",
+          consentAccepted: true,
+          status: "NEW",
+          locale: locale || "en",
+          notificationStatus: "PENDING",
+          notes: `Linked Career Application ID: ${created.id}`,
+          idempotencyKey: idempotencyKey ? `lead_${idempotencyKey}` : undefined,
         },
       });
 

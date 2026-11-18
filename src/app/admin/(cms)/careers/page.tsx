@@ -9,6 +9,7 @@ import {
   updateCareerApplicationStatus,
   deleteCareerApplication,
   saveCareersPageContent,
+  retryCareerNotificationAction,
 } from "../../actions";
 
 const statuses = ["NEW", "REVIEWED", "SHORTLISTED", "REJECTED"];
@@ -90,6 +91,7 @@ export default async function CareersAdminPage() {
                 <th>Candidate</th>
                 <th>Position</th>
                 <th>CV Document</th>
+                <th>Notification</th>
                 <th>Status & Review</th>
                 <th className="lead-row-actions" />
               </tr>
@@ -149,6 +151,63 @@ export default async function CareersAdminPage() {
                     <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
                       {app.cvFilename}
                     </div>
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        backgroundColor:
+                          app.notificationStatus === "DELIVERED"
+                            ? "#dcfce7"
+                            : app.notificationStatus === "ACCEPTED"
+                            ? "#dbeafe"
+                            : app.notificationStatus === "BLOCKED"
+                            ? "#fef3c7"
+                            : app.notificationStatus === "FAILED"
+                            ? "#fee2e2"
+                            : "#f3f4f6",
+                        color:
+                          app.notificationStatus === "DELIVERED"
+                            ? "#15803d"
+                            : app.notificationStatus === "ACCEPTED"
+                            ? "#1d4ed8"
+                            : app.notificationStatus === "BLOCKED"
+                            ? "#b45309"
+                            : app.notificationStatus === "FAILED"
+                            ? "#b91c1c"
+                            : "#4b5563",
+                      }}
+                    >
+                      {app.notificationStatus}
+                    </span>
+                    {(app.notificationStatus === "FAILED" || app.notificationStatus === "BLOCKED") && (
+                      <form
+                        action={async () => {
+                          "use server";
+                          await retryCareerNotificationAction(app.id);
+                        }}
+                        style={{ marginTop: "6px" }}
+                      >
+                        <button
+                          type="submit"
+                          style={{
+                            padding: "3px 8px",
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            borderRadius: "4px",
+                            border: "1px solid #d1d5db",
+                            backgroundColor: "#ffffff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Retry →
+                        </button>
+                      </form>
+                    )}
                   </td>
                   <td>
                     <form action={updateCareerApplicationStatus} className="lead-followup">

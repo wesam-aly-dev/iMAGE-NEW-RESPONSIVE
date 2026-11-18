@@ -29,3 +29,7 @@ export function getPageSectionLayout(value:unknown):(typeof PAGE_SECTION_LAYOUTS
 export function withPageSectionLayout<T extends {layout:PageSectionLayout}>(item:T,layout:PageSectionLayout):T{
   return {...item,layout};
 }
+
+export function layoutSupportsImage(value: unknown): boolean {
+  return normalizePageSectionLayout(value) !== "TEXT";
+}

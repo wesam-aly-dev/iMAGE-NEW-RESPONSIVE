@@ -58,10 +58,15 @@ model Homepage {
   heroDiscoverEn         String
   heroDiscoverAr         String
   heroMediaUrl           String
+  heroMediaType          String              @default("IMAGE")
+  heroFocalPoint         String              @default("center")
   heroVideoDesktopUrl    String?
-  heroVideoMobileUrl     String?
-  heroMobileMediaUrl     String?
   heroPosterUrl          String?
+  heroMobileMediaType    String              @default("INHERIT")
+  heroMobileMediaUrl     String?
+  heroVideoMobileUrl     String?
+  heroMobilePosterUrl    String?
+  heroMobileFocalPoint   String              @default("center")
   heroMediaAltEn         String
   heroMediaAltAr         String
   aboutEnabled           Boolean             @default(true)

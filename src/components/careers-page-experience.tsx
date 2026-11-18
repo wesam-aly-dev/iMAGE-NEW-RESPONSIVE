@@ -22,6 +22,7 @@ export function CareersPageExperience({ copy }: { copy: CareersPageContent }) {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState<CareerApplicationState>({ status: "idle" });
+  const [idempotencyKey, setIdempotencyKey] = useState(() => `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
 
   // Controlled form values preserved across errors
   const [formValues, setFormValues] = useState({
@@ -85,6 +86,7 @@ export function CareersPageExperience({ copy }: { copy: CareersPageContent }) {
     formData.set("phone", formValues.phone);
     formData.set("email", formValues.email);
     formData.set("notes", formValues.notes);
+    formData.set("idempotencyKey", idempotencyKey);
 
     const chosenJob = page.jobs.find((j) => j.id === selectedJobId);
     if (chosenJob) {
@@ -101,6 +103,7 @@ export function CareersPageExperience({ copy }: { copy: CareersPageContent }) {
       if (res.status === "success") {
         // Clear fields on confirmed success
         setFormValues({ fullName: "", phone: "", email: "", notes: "" });
+        setIdempotencyKey(`idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
       }
     } catch {
       setFormState({

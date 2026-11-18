@@ -16,6 +16,7 @@ import type {
 import {
   saveProject,
   setProjectStatus,
+  resolveProjectLocationAction,
   type UploadedMedia,
   type ActionState,
 } from "@/app/admin/actions";
@@ -66,6 +67,71 @@ const TABS: Array<{ key: TabKey; labelEn: string; labelAr: string; number: strin
   { key: "seo", labelEn: "SEO & Publishing", labelAr: "الظهور والنشر", number: "12" },
 ];
 
+export const FIELD_TO_TAB: Record<string, TabKey> = {
+  nameEn: "basic",
+  nameAr: "basic",
+  slug: "basic",
+  projectCode: "basic",
+  status: "basic",
+  projectType: "basic",
+  progressStatus: "basic",
+  featured: "basic",
+  featuredOrder: "basic",
+
+  heroTitleEn: "hero",
+  heroTitleAr: "hero",
+  heroDescriptionEn: "hero",
+  heroDescriptionAr: "hero",
+  coverImageUrl: "hero",
+  mobileHeroImageUrl: "hero",
+  heroVideoUrl: "hero",
+  heroVideoPosterUrl: "hero",
+  logoUrl: "hero",
+  cardImageUrl: "hero",
+  coverImageAltEn: "hero",
+  coverImageAltAr: "hero",
+  coverImageFocalPoint: "hero",
+
+  shortDescriptionEn: "overview",
+  shortDescriptionAr: "overview",
+  fullDescriptionEn: "overview",
+  fullDescriptionAr: "overview",
+  keyFacts: "overview",
+
+  highlights: "highlights",
+  unitTypes: "unit_types",
+  masterPlanUrl: "master_plan",
+
+  locationEn: "location",
+  locationAr: "location",
+  addressEn: "location",
+  addressAr: "location",
+  latitude: "location",
+  longitude: "location",
+  mapUrl: "location",
+  directionsUrl: "location",
+  connectivity: "location",
+
+  gallery: "gallery",
+  construction: "construction",
+  brochureUrl: "brochure",
+  ctaLabelEn: "brochure",
+  ctaLabelAr: "brochure",
+  ctaUrl: "brochure",
+
+  virtualTourEnabled: "visual_tours",
+  virtualTourUrl: "visual_tours",
+  virtualTourUrlAr: "visual_tours",
+  virtualTourLabelEn: "visual_tours",
+  virtualTourLabelAr: "visual_tours",
+
+  seoTitleEn: "seo",
+  seoTitleAr: "seo",
+  seoDescriptionEn: "seo",
+  seoDescriptionAr: "seo",
+  ogImageUrl: "seo",
+};
+
 export interface GalleryItemState {
   id?: string;
   imageUrl: string;
@@ -87,6 +153,81 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
   const [actionResult, setActionResult] = useState<ActionState>({});
   const [isDirty, setIsDirty] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
+  const [locationResolveStatus, setLocationResolveStatus] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
+  const handleResolveLocation = async (overrideUrl?: string) => {
+    const targetUrl = (typeof overrideUrl === "string" ? overrideUrl : formData.mapUrl)?.trim();
+    if (!targetUrl) {
+      setLocationResolveStatus({
+        type: "error",
+        message: "Please enter a Google Maps URL, short share link, or coordinates into the field first.",
+      });
+      return;
+    }
+
+    setIsResolvingLocation(true);
+    setLocationResolveStatus({
+      type: "info",
+      message: "Resolving Google Maps destination...",
+    });
+
+    try {
+      const res = await resolveProjectLocationAction(targetUrl);
+      if (res.success) {
+        let shouldUpdateCoords = true;
+        // Prompt for confirmation if manual coordinates already exist and differ
+        if (
+          formData.latitude &&
+          formData.longitude &&
+          res.latitude !== undefined &&
+          res.longitude !== undefined
+        ) {
+          const curLat = parseFloat(formData.latitude);
+          const curLng = parseFloat(formData.longitude);
+          if (
+            !isNaN(curLat) &&
+            !isNaN(curLng) &&
+            (Math.abs(curLat - res.latitude) > 0.0001 || Math.abs(curLng - res.longitude) > 0.0001)
+          ) {
+            shouldUpdateCoords = window.confirm(
+              `Coordinates are already manually set to (${formData.latitude}, ${formData.longitude}).\n\nDo you want to overwrite them with the resolved coordinates (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})?`
+            );
+          }
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          latitude: shouldUpdateCoords && res.latitude !== undefined ? res.latitude.toString() : prev.latitude,
+          longitude: shouldUpdateCoords && res.longitude !== undefined ? res.longitude.toString() : prev.longitude,
+          directionsUrl: res.directionsUrl || prev.directionsUrl,
+          mapUrl: targetUrl,
+        }));
+        setIsDirty(true);
+        setLocationResolveStatus({
+          type: "success",
+          message: res.placeName
+            ? `✓ Verified location: ${res.placeName} (${res.latitude?.toFixed(4)}, ${res.longitude?.toFixed(4)})`
+            : `✓ Verified coordinates: (${res.latitude?.toFixed(4)}, ${res.longitude?.toFixed(4)})`,
+        });
+      } else {
+        setLocationResolveStatus({
+          type: "error",
+          message: res.error || "Could not resolve coordinates or place from this link.",
+        });
+      }
+    } catch (err: any) {
+      setLocationResolveStatus({
+        type: "error",
+        message: err.message || "Failed to resolve Google Maps link.",
+      });
+    } finally {
+      setIsResolvingLocation(false);
+    }
+  };
 
   // Controlled authoritative form state
   const [formData, setFormData] = useState({
@@ -397,14 +538,38 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
       if (!formData.locationEn.trim()) errors.locationEn = "Location is required to publish.";
       if (!formData.shortDescriptionEn.trim()) errors.shortDescriptionEn = "Short description is required to publish.";
       if (!formData.coverImageUrl.trim()) errors.coverImageUrl = "Desktop cover image is required to publish.";
+      if (formData.featuredOrder < 0 && formData.featuredOrder !== -1) {
+        errors.featuredOrder = "Featured order must be 0 or greater (or -1 for unranked).";
+      }
+      if (formData.latitude || formData.longitude) {
+        if (!formData.latitude || !formData.longitude) {
+          errors[formData.latitude ? "longitude" : "latitude"] = "Please provide both latitude and longitude coordinates, or leave both empty.";
+        } else {
+          const lat = parseFloat(formData.latitude);
+          const lng = parseFloat(formData.longitude);
+          if (isNaN(lat) || lat < -90 || lat > 90) {
+            errors.latitude = "Latitude must be a valid number between -90 and 90.";
+          }
+          if (isNaN(lng) || lng < -180 || lng > 180) {
+            errors.longitude = "Longitude must be a valid number between -180 and 180.";
+          }
+        }
+      }
 
       if (Object.keys(errors).length > 0) {
         setValidationErrors(errors);
-        // Switch to the first tab that has an error
-        if (errors.nameEn) setActiveTab("basic");
-        else if (errors.coverImageUrl) setActiveTab("hero");
-        else if (errors.shortDescriptionEn) setActiveTab("overview");
-        else if (errors.locationEn) setActiveTab("location");
+        const firstField = Object.keys(errors)[0];
+        const targetTab = FIELD_TO_TAB[firstField];
+        if (targetTab) {
+          setActiveTab(targetTab);
+        }
+        setTimeout(() => {
+          const el = document.querySelector(`[name="${firstField}"]`) as HTMLElement;
+          if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 100);
 
         setActionResult({
           error: "Please complete all required fields before publishing: " + Object.values(errors).join(" "),
@@ -497,6 +662,22 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
             if (!projectId && typeof window !== "undefined") {
               window.history.replaceState(null, "", `/admin/projects/${res.projectId}`);
             }
+          }
+        } else if (res.error) {
+          const field = res.field;
+          if (field) {
+            setValidationErrors({ [field]: res.error });
+            const targetTab = (res.tab as TabKey) || FIELD_TO_TAB[field];
+            if (targetTab) {
+              setActiveTab(targetTab);
+            }
+            setTimeout(() => {
+              const el = document.querySelector(`[name="${field}"]`) as HTMLElement;
+              if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }, 100);
           }
         }
       } catch (err: any) {
@@ -644,11 +825,7 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
       >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
-          const hasError =
-            (tab.key === "basic" && validationErrors.nameEn) ||
-            (tab.key === "hero" && validationErrors.coverImageUrl) ||
-            (tab.key === "overview" && validationErrors.shortDescriptionEn) ||
-            (tab.key === "location" && validationErrors.locationEn);
+          const hasError = Object.keys(validationErrors).some((field) => FIELD_TO_TAB[field] === tab.key);
 
           return (
             <button
@@ -787,11 +964,18 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
                 <span style={{ fontSize: "12px", color: "var(--muted)" }}>Order:</span>
                 <input
                   type="number"
+                  min="0"
+                  name="featuredOrder"
                   value={formData.featuredOrder}
                   onChange={(e) => handleFieldChange("featuredOrder", parseInt(e.target.value) || 0)}
                   style={{ width: "60px", padding: "4px 8px" }}
                 />
               </label>
+              {validationErrors.featuredOrder && (
+                <span className="field-error" style={{ color: "#dc2626", fontSize: "12px", display: "block", width: "100%" }}>
+                  {validationErrors.featuredOrder}
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1505,36 +1689,169 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
             </label>
           </div>
 
+          {/* Google Maps Location Link with Server Resolution */}
+          <div style={{ marginTop: "20px", padding: "16px", background: "#f8faf8", border: "1px solid var(--line)", borderRadius: "8px" }}>
+            <label style={{ display: "block", marginBottom: "8px", fontWeight: 600 }}>
+              Google Maps Location URL or Share Link
+            </label>
+            <p className="hint" style={{ marginTop: "-4px", marginBottom: "10px" }}>
+              Paste a full Google Maps place URL, coordinate link (e.g. <code>30.0131, 31.4913</code>), or short share link (<code>maps.app.goo.gl/...</code>).
+            </p>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <input
+                type="text"
+                name="mapUrl"
+                value={formData.mapUrl}
+                onChange={(e) => handleFieldChange("mapUrl", e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text")?.trim();
+                  if (pasted && (pasted.startsWith("http") || pasted.includes(",") || pasted.includes("<iframe") || pasted.includes("google.com"))) {
+                    handleFieldChange("mapUrl", pasted);
+                    setTimeout(() => handleResolveLocation(pasted), 120);
+                  }
+                }}
+                placeholder="https://maps.app.goo.gl/... or https://maps.google.com/?q=..."
+                style={{ flex: "1 1 300px", minWidth: "220px" }}
+              />
+              <button
+                type="button"
+                onClick={() => handleResolveLocation()}
+                disabled={isResolvingLocation || !formData.mapUrl.trim()}
+                className="secondary"
+                style={{ padding: "9px 18px", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                {isResolvingLocation ? (
+                  <>
+                    <span className="spinner" style={{ width: "12px", height: "12px" }} />
+                    <span>Resolving...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                    </svg>
+                    <span>Resolve &amp; Preview Map</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {locationResolveStatus && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "10px 14px",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  backgroundColor:
+                    locationResolveStatus.type === "success"
+                      ? "#f0fdf4"
+                      : locationResolveStatus.type === "error"
+                      ? "#fef2f2"
+                      : "#eff6ff",
+                  color:
+                    locationResolveStatus.type === "success"
+                      ? "#15803d"
+                      : locationResolveStatus.type === "error"
+                      ? "#b91c1c"
+                      : "#1d4ed8",
+                  border: `1px solid ${
+                    locationResolveStatus.type === "success"
+                      ? "#bbf7d0"
+                      : locationResolveStatus.type === "error"
+                      ? "#fecaca"
+                      : "#bfdbfe"
+                  }`,
+                }}
+              >
+                {locationResolveStatus.message}
+              </div>
+            )}
+
+            {/* Resolved Map Preview */}
+            {formData.latitude && formData.longitude && !isNaN(parseFloat(formData.latitude)) && !isNaN(parseFloat(formData.longitude)) ? (
+              <div style={{ marginTop: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--muted)" }}>
+                    Live Map Preview (Lat: {parseFloat(formData.latitude).toFixed(4)}, Lng: {parseFloat(formData.longitude).toFixed(4)})
+                  </span>
+                  {formData.directionsUrl && (
+                    <a
+                      href={formData.directionsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: "12px", color: "var(--forest)", textDecoration: "none", fontWeight: 500 }}
+                    >
+                      Test Directions Link ↗
+                    </a>
+                  )}
+                </div>
+                <iframe
+                  title="Project Location Preview"
+                  src={`https://maps.google.com/maps?q=${formData.latitude},${formData.longitude}&z=15&output=embed`}
+                  width="100%"
+                  height="260"
+                  style={{ border: "1px solid var(--line)", borderRadius: "8px", display: "block", background: "#eaeaea" }}
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
+          </div>
+
           <div className="bilingual" style={{ marginTop: "16px" }}>
             <label>
               Latitude Coordinate
               <input
                 type="text"
+                name="latitude"
                 value={formData.latitude}
                 onChange={(e) => handleFieldChange("latitude", e.target.value)}
                 placeholder="e.g. 30.0275"
               />
+              <span className="hint" style={{ fontSize: "11px", color: "var(--muted)" }}>
+                -90 to 90 (negative = South)
+              </span>
+              {validationErrors.latitude && (
+                <span className="field-error" style={{ color: "#dc2626", fontSize: "12px", display: "block" }}>
+                  {validationErrors.latitude}
+                </span>
+              )}
             </label>
 
             <label>
               Longitude Coordinate
               <input
                 type="text"
+                name="longitude"
                 value={formData.longitude}
                 onChange={(e) => handleFieldChange("longitude", e.target.value)}
                 placeholder="e.g. 31.4912"
               />
+              <span className="hint" style={{ fontSize: "11px", color: "var(--muted)" }}>
+                -180 to 180 (negative = West)
+              </span>
+              {validationErrors.longitude && (
+                <span className="field-error" style={{ color: "#dc2626", fontSize: "12px", display: "block" }}>
+                  {validationErrors.longitude}
+                </span>
+              )}
             </label>
           </div>
 
           <label style={{ marginTop: "16px" }}>
-            Google Maps Destination URL
+            Directions Link URL (Optional override)
             <input
               type="text"
-              value={formData.mapUrl}
-              onChange={(e) => handleFieldChange("mapUrl", e.target.value)}
-              placeholder="https://maps.google.com/?q=..."
+              name="directionsUrl"
+              value={formData.directionsUrl}
+              onChange={(e) => handleFieldChange("directionsUrl", e.target.value)}
+              placeholder="https://www.google.com/maps/dir/?api=1&destination=..."
             />
+            {validationErrors.directionsUrl && (
+              <span className="field-error" style={{ color: "#dc2626", fontSize: "12px", display: "block" }}>
+                {validationErrors.directionsUrl}
+              </span>
+            )}
           </label>
 
           {/* Repeatable Connectivity Destinations */}
@@ -1542,7 +1859,7 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "15px", color: "var(--ink)" }}>Nearby Landmarks &amp; Access ({connectivity.length})</h3>
-                <span style={{ fontSize: "12px", color: "var(--muted)" }}>Driving duration to major hubs, universities, and transit axes.</span>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>Driving duration to major hubs, universities, and transit axes. Blank rows are ignored.</span>
               </div>
               <button
                 type="button"
@@ -1560,13 +1877,19 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
               </button>
             </div>
 
+            {validationErrors.connectivity && (
+              <div className="admin-alert admin-alert--error" style={{ marginBottom: "12px", fontSize: "13px" }}>
+                {validationErrors.connectivity}
+              </div>
+            )}
+
             {connectivity.map((c, idx) => (
               <div
                 key={c.id || `conn-${idx}`}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr 120px 120px 90px",
-                  gap: "10px",
+                  gridTemplateColumns: "1.2fr 1.2fr 110px 110px 100px 90px",
+                  gap: "8px",
                   alignItems: "center",
                   padding: "10px",
                   background: "#fbfcfb",
@@ -1621,6 +1944,21 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
                   }}
                   placeholder="المدة (١٢ دقيقة)"
                 />
+                <select
+                  value={c.travelType || "CAR"}
+                  onChange={(e) => {
+                    const updated = [...connectivity];
+                    updated[idx].travelType = e.target.value;
+                    setConnectivity(updated);
+                    setIsDirty(true);
+                  }}
+                  style={{ fontSize: "12px", padding: "6px 4px" }}
+                >
+                  <option value="CAR">Car / سيارة</option>
+                  <option value="METRO">Metro / مترو</option>
+                  <option value="WALK">Walking / سير</option>
+                  <option value="FLIGHT">Flight / طيران</option>
+                </select>
                 <div style={{ display: "flex", gap: "4px" }}>
                   <button
                     type="button"

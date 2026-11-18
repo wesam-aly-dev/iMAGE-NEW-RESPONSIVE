@@ -4,12 +4,45 @@ import { Bilingual, Check, Field, RgbField, Textarea } from "@/components/admin/
 import { MediaField } from "@/components/admin/media-field";
 import { LifestyleStoryImagesEditor } from "@/components/admin/lifestyle-story-images-editor";
 import { LifestyleCtaEditor } from "@/components/admin/lifestyle-cta-editor";
-import { saveHomepage } from "../../actions";
+import { HeroMediaEditor } from "@/components/admin/hero-media-editor";
+import {
+  saveHomepage,
+  applyWhiteThemeAction,
+  applyWarmThemeAction,
+  revertColorsAction,
+} from "../../actions";
 import { TypographyFields } from "@/components/admin/typography-fields";
 export default async function HomepageAdmin(){const [h,allAssets,allProjects,allArticles]=await Promise.all([prisma.homepage.findUniqueOrThrow({where:{id:"homepage"},include:{stats:{orderBy:{sortOrder:"asc"}}}}),prisma.mediaAsset.findMany({orderBy:{createdAt:"desc"},select:{id:true,url:true,filename:true,mimeType:true,size:true,kind:true}}),prisma.project.findMany({where:{status:"PUBLISHED"},orderBy:[{featured:"desc"},{featuredOrder:"asc"},{nameEn:"asc"}]}),prisma.newsArticle.findMany({where:{status:"PUBLISHED"},orderBy:[{publicationDate:"desc"}]})]);const videos=allAssets.filter(asset=>asset.kind==="VIDEO");const images=allAssets.filter(asset=>asset.kind==="IMAGE");let currentManualArticleIds:string[]=[];try{currentManualArticleIds=JSON.parse(h.statsJournalArticleIds||"[]");}catch{currentManualArticleIds=[];}return <><header className="page-head"><div><p>Homepage</p><h1>Homepage content</h1><span>Uploads are added to Media immediately. Click Save Homepage to publish field assignments.</span></div></header><ActionForm action={saveHomepage} className="admin-form" submitLabel="Save Homepage">
-  <section className="panel"><div className="section-title"><h2>Opening experience</h2><Check name="openingEnabled" label="Enable Opening Experience" checked={h.openingEnabled}/></div><Bilingual base="openingHeadline" label="Opening headline" en={h.openingHeadlineEn} ar={h.openingHeadlineAr}/><MediaField name="openingVideoDesktopUrl" label="Opening Desktop Video" value={h.openingVideoDesktopUrl??""} assets={videos} kind="VIDEO"/><MediaField name="openingVideoMobileUrl" label="Opening Mobile Video" value={h.openingVideoMobileUrl??""} assets={videos} kind="VIDEO"/><MediaField name="openingPosterUrl" label="Opening Poster Image" value={h.openingPosterUrl??""} assets={images} kind="IMAGE"/></section>
-  <section className="panel"><div className="section-title"><h2>Hero</h2><Check name="heroEnabled" label="Visible" checked={h.heroEnabled}/></div><Bilingual base="heroEyebrow" label="Eyebrow" en={h.heroEyebrowEn} ar={h.heroEyebrowAr}/><Bilingual base="heroTitle" label="Title (one line per visual line)" en={h.heroTitleEn} ar={h.heroTitleAr} textarea required/><Bilingual base="heroNote" label="Supporting text" en={h.heroNoteEn} ar={h.heroNoteAr} textarea required/><Bilingual base="heroDiscover" label="Discover label" en={h.heroDiscoverEn} ar={h.heroDiscoverAr}/><MediaField name="heroVideoDesktopUrl" label="Hero Desktop Video" value={h.heroVideoDesktopUrl??""} assets={videos} kind="VIDEO"/><MediaField name="heroVideoMobileUrl" label="Hero Mobile Video" value={h.heroVideoMobileUrl??""} assets={videos} kind="VIDEO"/><MediaField name="heroMediaUrl" label="Hero Desktop Image" value={h.heroMediaUrl} assets={images} kind="IMAGE" required/><MediaField name="heroMobileMediaUrl" label="Hero Mobile Image" value={h.heroMobileMediaUrl??""} assets={images} kind="IMAGE"/><MediaField name="heroPosterUrl" label="Hero Poster Image" value={h.heroPosterUrl??""} assets={images} kind="IMAGE"/><Bilingual base="heroMediaAlt" label="Hero image alt text" en={h.heroMediaAltEn} ar={h.heroMediaAltAr}/></section>
+  <section className="panel"><input type="hidden" name="has_openingEnabled" value="1" /><div className="section-title"><h2>Opening experience</h2><Check name="openingEnabled" label="Enable Opening Experience" checked={h.openingEnabled}/></div><Bilingual base="openingHeadline" label="Opening headline" en={h.openingHeadlineEn} ar={h.openingHeadlineAr}/><MediaField name="openingVideoDesktopUrl" label="Opening Desktop Video" value={h.openingVideoDesktopUrl??""} assets={videos} kind="VIDEO"/><MediaField name="openingVideoMobileUrl" label="Opening Mobile Video" value={h.openingVideoMobileUrl??""} assets={videos} kind="VIDEO"/><MediaField name="openingPosterUrl" label="Opening Poster Image" value={h.openingPosterUrl??""} assets={images} kind="IMAGE"/></section>
   <section className="panel">
+    <input type="hidden" name="has_heroEnabled" value="1" />
+    <div className="section-title">
+      <h2>Hero</h2>
+      <Check name="heroEnabled" label="Visible" checked={h.heroEnabled}/>
+    </div>
+    <Bilingual base="heroEyebrow" label="Eyebrow" en={h.heroEyebrowEn} ar={h.heroEyebrowAr}/>
+    <Bilingual base="heroTitle" label="Title (one line per visual line)" en={h.heroTitleEn} ar={h.heroTitleAr} textarea required/>
+    <Bilingual base="heroNote" label="Supporting text" en={h.heroNoteEn} ar={h.heroNoteAr} textarea required/>
+    <Bilingual base="heroDiscover" label="Discover label" en={h.heroDiscoverEn} ar={h.heroDiscoverAr}/>
+    <HeroMediaEditor
+      initialDesktopType={((h as any).heroMediaType as "IMAGE" | "VIDEO") || (h.heroVideoDesktopUrl ? "VIDEO" : "IMAGE")}
+      initialDesktopImage={h.heroMediaUrl}
+      initialDesktopVideo={h.heroVideoDesktopUrl}
+      initialDesktopPoster={h.heroPosterUrl}
+      initialDesktopFocalPoint={(h as any).heroFocalPoint || "center"}
+      initialMobileType={((h as any).heroMobileMediaType as "INHERIT" | "IMAGE" | "VIDEO") || "INHERIT"}
+      initialMobileImage={h.heroMobileMediaUrl}
+      initialMobileVideo={h.heroVideoMobileUrl}
+      initialMobilePoster={(h as any).heroMobilePosterUrl}
+      initialMobileFocalPoint={(h as any).heroMobileFocalPoint || "center"}
+      initialAltEn={h.heroMediaAltEn}
+      initialAltAr={h.heroMediaAltAr}
+      images={images}
+      videos={videos}
+    />
+  </section>
+  <section className="panel">
+    <input type="hidden" name="has_projectsEnabled" value="1" />
     <div className="section-title">
       <h2>Featured developments showcase</h2>
       <Check name="projectsEnabled" label="Section Visible" checked={h.projectsEnabled}/>
@@ -100,6 +133,7 @@ export default async function HomepageAdmin(){const [h,allAssets,allProjects,all
     </div>
   </section>
   <section className="panel" id="about-our-story">
+    <input type="hidden" name="has_lifestyleEnabled" value="1" />
     <div className="section-title">
       <h2>About / Our Story — Living Narrative</h2>
       <Check name="lifestyleEnabled" label="Section Visible" checked={h.lifestyleEnabled}/>
@@ -295,6 +329,7 @@ export default async function HomepageAdmin(){const [h,allAssets,allProjects,all
     </div>
   </section>
   <section className="panel">
+    <input type="hidden" name="has_statsEnabled" value="1" />
     <div className="section-title">
       <h2>News & Journal section</h2>
       <Check name="statsEnabled" label="Section Visible" checked={h.statsEnabled}/>
@@ -379,8 +414,9 @@ export default async function HomepageAdmin(){const [h,allAssets,allProjects,all
       </div>
     )}
   </section>
-  <section className="panel"><div className="section-title"><h2>Journal preview</h2><Check name="journalEnabled" label="Visible" checked={h.journalEnabled}/></div><Bilingual base="journalEyebrow" label="Eyebrow" en={h.journalEyebrowEn} ar={h.journalEyebrowAr}/><Bilingual base="journalTitle" label="Heading" en={h.journalTitleEn} ar={h.journalTitleAr}/><p className="hint">Featured articles and their order are managed under News.</p></section>
+  <section className="panel"><input type="hidden" name="has_journalEnabled" value="1" /><div className="section-title"><h2>Journal preview</h2><Check name="journalEnabled" label="Visible" checked={h.journalEnabled}/></div><Bilingual base="journalEyebrow" label="Eyebrow" en={h.journalEyebrowEn} ar={h.journalEyebrowAr}/><Bilingual base="journalTitle" label="Heading" en={h.journalTitleEn} ar={h.journalTitleAr}/><p className="hint">Featured articles and their order are managed under News.</p></section>
   <section className="panel">
+    <input type="hidden" name="has_closingEnabled" value="1" />
     <div className="section-title">
       <h2>Enquiry & information card section (Closing)</h2>
       <Check name="closingEnabled" label="Section Visible" checked={h.closingEnabled}/>
@@ -408,7 +444,54 @@ export default async function HomepageAdmin(){const [h,allAssets,allProjects,all
       <Bilingual base="closingSuccessMessage" label="Confirmation Message (After Submission)" en={h.closingSuccessMessageEn || "Thank you, your enquiry has been received. Our specialized team will be in touch shortly."} ar={h.closingSuccessMessageAr || "شكراً لك، تم استلام استفسارك بنجاح. سيتواصل معك فريقنا المختص قريباً."} textarea/>
     </div>
   </section>
-  <section className="panel"><h2>Homepage background colors</h2><p className="hint">Each label names the exact homepage section that will change. Use the format red, green, blue; each number must be between 0 and 255.</p><div className="bilingual"><RgbField name="openingBackgroundRgb" label="Homepage — Opening experience" value={h.openingBackgroundRgb}/><RgbField name="heroBackgroundRgb" label="Homepage — Hero" value={h.heroBackgroundRgb}/><RgbField name="projectsBackgroundRgb" label="Homepage — Featured projects" value={h.projectsBackgroundRgb}/><RgbField name="aboutBackgroundRgb" label="Homepage — About us timeline" value={h.aboutBackgroundRgb}/><RgbField name="lifestyleBackgroundRgb" label="Homepage — Lifestyle" value={h.lifestyleBackgroundRgb}/><RgbField name="statsBackgroundRgb" label="Homepage — News & Journal" value={h.statsBackgroundRgb}/><RgbField name="journalBackgroundRgb" label="Homepage — Journal preview" value={h.journalBackgroundRgb}/><RgbField name="closingBackgroundRgb" label="Homepage — Closing contact section" value={h.closingBackgroundRgb}/><RgbField name="footerBackgroundRgb" label="Homepage — Footer" value={h.footerBackgroundRgb}/></div></section>
-  <section className="panel"><h2>Controlled section order</h2><Textarea name="sectionOrder" label="Comma-separated known sections" value={(JSON.parse(h.sectionOrder) as string[]).filter(section=>section!=="story").join(", ")} required/><p className="hint">Allowed: projects, lifestyle, stats, journal, closing. Hero and footer remain fixed.</p></section>
+  <section className="panel">
+    <h2>Homepage background colors</h2>
+    <p className="hint">Each label names the exact homepage section that will change. Pure white (255, 255, 255) is the default for content sections. Off-white (245, 243, 238) remains available. Hero overlays and footer dark styling are preserved.</p>
+    
+    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", margin: "14px 0 20px", padding: "12px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+      <button
+        type="submit"
+        formAction={applyWhiteThemeAction}
+        className="button button--secondary"
+        style={{ fontSize: "12px", padding: "6px 12px", background: "#ffffff", border: "1px solid #d9d9d2", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+      >
+        Apply Pure White Theme (#FFFFFF)
+      </button>
+      <button
+        type="submit"
+        formAction={applyWarmThemeAction}
+        className="button button--secondary"
+        style={{ fontSize: "12px", padding: "6px 12px", background: "#F5F3EE", border: "1px solid #d9d9d2", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+      >
+        Apply Warm Off-White Theme (#F5F3EE)
+      </button>
+      <button
+        type="submit"
+        formAction={revertColorsAction}
+        className="button button--secondary"
+        style={{ fontSize: "12px", padding: "6px 12px", background: "#f0f2f1", border: "1px solid #c8d1cc", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+      >
+        Revert to Previous Colors
+      </button>
+    </div>
+
+    <div className="bilingual">
+      <RgbField name="openingBackgroundRgb" label="Homepage — Opening experience" value={h.openingBackgroundRgb}/>
+      <RgbField name="heroBackgroundRgb" label="Homepage — Hero" value={h.heroBackgroundRgb}/>
+      <RgbField name="projectsBackgroundRgb" label="Homepage — Featured projects" value={h.projectsBackgroundRgb}/>
+      <RgbField name="aboutBackgroundRgb" label="Homepage — About us timeline" value={h.aboutBackgroundRgb}/>
+      <RgbField name="lifestyleBackgroundRgb" label="Homepage — Lifestyle" value={h.lifestyleBackgroundRgb}/>
+      <RgbField name="statsBackgroundRgb" label="Homepage — News & Journal" value={h.statsBackgroundRgb}/>
+      <RgbField name="journalBackgroundRgb" label="Homepage — Journal preview" value={h.journalBackgroundRgb}/>
+      <RgbField name="closingBackgroundRgb" label="Homepage — Closing contact section" value={h.closingBackgroundRgb}/>
+      <RgbField name="footerBackgroundRgb" label="Homepage — Footer" value={h.footerBackgroundRgb}/>
+    </div>
+  </section>
+  <section className="panel">
+    <input type="hidden" name="has_sectionOrder" value="1" />
+    <h2>Controlled section order</h2>
+    <Textarea name="sectionOrder" label="Comma-separated known sections" value={(JSON.parse(h.sectionOrder) as string[]).filter(section=>section!=="story").join(", ")} required/>
+    <p className="hint">Allowed: projects, lifestyle, stats, journal, closing. Hero and footer remain fixed.</p>
+  </section>
   <TypographyFields fields={[{key:"opening",label:"Opening experience"},{key:"homeHero",label:"Homepage — Hero"},{key:"projects",label:"Featured projects / Developments"},{key:"aboutTimeline",label:"About timeline"},{key:"lifestyle",label:"Lifestyle"},{key:"stats",label:"News & Journal"},{key:"journal",label:"Journal preview / Journal page"},{key:"closing",label:"Closing contact section"},{key:"footer",label:"Footer wordmark"}]}/>
   </ActionForm></>}

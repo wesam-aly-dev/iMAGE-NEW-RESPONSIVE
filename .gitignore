@@ -25,6 +25,10 @@ backups/
 .env.*
 !.env.example
 *.db
+*.db.bak
 *.db-journal
 *.db-wal
 *.db-shm
+prisma/*-backup.json
+prisma/*.log
+private-storage/

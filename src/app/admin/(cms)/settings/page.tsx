@@ -7,12 +7,17 @@ import { getResolvedNotificationSettings } from "@/lib/notifications/email-servi
 import { saveSettings } from "../../actions";
 
 export default async function Settings() {
-  const s = await prisma.globalSettings.findUniqueOrThrow({
-    where: { id: "global" },
-    include: { socialLinks: { orderBy: { sortOrder: "asc" } } },
-  });
-
-  const notificationMeta = await getResolvedNotificationSettings();
+  const [s, notificationMeta, recentJobs] = await Promise.all([
+    prisma.globalSettings.findUniqueOrThrow({
+      where: { id: "global" },
+      include: { socialLinks: { orderBy: { sortOrder: "asc" } } },
+    }),
+    getResolvedNotificationSettings(),
+    prisma.notificationJob.findMany({
+      take: 6,
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return (
     <>
@@ -152,11 +157,89 @@ export default async function Settings() {
         </p>
         <NotificationTestForm
           defaultEmail={s.notificationRecipientEmail || ""}
+          savedRecipient={s.notificationRecipientEmail || ""}
           lastTestAt={s.lastNotificationTestAt ? s.lastNotificationTestAt.toISOString() : null}
           lastTestResult={s.lastNotificationTestResult}
-          smtpConfigured={notificationMeta.smtpConfigured || notificationMeta.hasResend}
+          smtpConfigured={notificationMeta.smtpConfigured}
+          hasResend={notificationMeta.hasResend}
         />
       </section>
+
+      {recentJobs.length > 0 && (
+        <section className="panel" style={{ marginTop: "32px" }}>
+          <h2>Recent Notification Attempts / سجل الإرسال الحديث</h2>
+          <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px", marginBottom: "16px" }}>
+            Audit log of recent system and inquiry notifications, their dispatch status, and delivery attempts.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date &amp; Time</th>
+                  <th>Type</th>
+                  <th>Recipient</th>
+                  <th>Subject</th>
+                  <th>Status</th>
+                  <th>Details / Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentJobs.map((job) => (
+                  <tr key={job.id}>
+                    <td style={{ fontSize: "12px", whiteSpace: "nowrap" }}>
+                      {job.createdAt.toLocaleString("en-GB")}
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#f3f4f6" }}>
+                        {job.jobType}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: "12px", fontFamily: "monospace" }}>{job.recipientEmail}</td>
+                    <td style={{ fontSize: "12px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {job.subject}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          backgroundColor:
+                            job.status === "DELIVERED"
+                              ? "#dcfce7"
+                              : job.status === "ACCEPTED"
+                              ? "#dbeafe"
+                              : job.status === "BLOCKED"
+                              ? "#fef3c7"
+                              : job.status === "FAILED"
+                              ? "#fee2e2"
+                              : "#f3f4f6",
+                          color:
+                            job.status === "DELIVERED"
+                              ? "#15803d"
+                              : job.status === "ACCEPTED"
+                              ? "#1d4ed8"
+                              : job.status === "BLOCKED"
+                              ? "#b45309"
+                              : job.status === "FAILED"
+                              ? "#b91c1c"
+                              : "#4b5563",
+                        }}
+                      >
+                        {job.status}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: "11px", color: "var(--muted, #6b7280)", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {job.lastError || (job.status === "DELIVERED" || job.status === "ACCEPTED" ? "Dispatched successfully" : "Pending")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </>
   );
 }

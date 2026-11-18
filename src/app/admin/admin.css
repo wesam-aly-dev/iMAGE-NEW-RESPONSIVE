@@ -857,6 +857,10 @@ td small {
   padding: 13px;
 }
 
+.admin-mobile-toggle {
+  display: none;
+}
+
 /* ==========================================================================
    Responsive Adaptations
    ========================================================================== */
@@ -866,15 +870,56 @@ td small {
     grid-template-columns: 1fr;
   }
   .admin-sidebar {
-    position: relative;
+    position: sticky;
+    top: 0;
     height: auto;
     max-height: none;
+    z-index: 50;
   }
-  .admin-sidebar-nav {
-    max-height: 380px;
+  .admin-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+  }
+  .admin-brand-link {
+    flex: 1;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .admin-mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+  }
+  .admin-mobile-toggle:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .admin-sidebar-nav,
+  .admin-sidebar-footer {
+    display: none;
+  }
+  .admin-sidebar.is-mobile-open .admin-sidebar-nav {
+    display: flex;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-sidebar.is-mobile-open .admin-sidebar-footer {
+    display: flex;
   }
   .admin-main {
-    padding: 30px 18px;
+    padding: 24px 16px;
+    min-width: 0;
   }
   .bilingual,
   .metric-grid {

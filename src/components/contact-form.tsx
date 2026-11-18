@@ -25,6 +25,7 @@ export function ContactForm({
   projectId,
 }: ContactFormProps) {
   const [state, action, pending] = useActionState(submitContact, initial);
+  const [idempotencyKey, setIdempotencyKey] = React.useState(() => `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
   const formRef = useRef<HTMLFormElement>(null);
   const ar = copy.locale === "ar";
   const countries = localizedCallingCodes(copy.locale);
@@ -32,6 +33,7 @@ export function ContactForm({
   useEffect(() => {
     if (state.status === "success") {
       formRef.current?.reset();
+      setIdempotencyKey(`idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
     }
   }, [state.status]);
 
@@ -76,12 +78,12 @@ export function ContactForm({
 
   // Submit button text:
   // In callback mode, default to "Request a Call Back" / "اطلب اتصالاً"
-  // In contact mode, default to "Send Enquiry" / "إرسال الاستفسار"
+  // In contact mode, default to "Send Inquiry" / "إرسال استفسار"
   const submitButtonLabel =
     variant === "contact"
       ? ar
-        ? "إرسال الاستفسار"
-        : "Send Enquiry"
+        ? "إرسال استفسار"
+        : "Send Inquiry"
       : copy.closing.submitLabel ||
         (ar ? "اطلب اتصالاً" : "Request a Call Back");
 
@@ -129,6 +131,7 @@ export function ContactForm({
       />
       <input type="hidden" name="sourcePage" value={sourcePage} />
       <input type="hidden" name="sourceCta" value={sourceCta} />
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <input
         className="contact-honeypot"
         name="website"
@@ -235,18 +238,23 @@ export function ContactForm({
         )}
       </div>
 
-      {/* 3. Email Address — Optional */}
+      {/* 3. Email Address — Required in contact mode, Optional in callback mode */}
       <div className="contact-form-group">
         <label htmlFor="contact-email" className="contact-label">
           <span>{ar ? "البريد الإلكتروني" : "Email Address"}</span>
-          <span className="contact-optional-tag">
-            {ar ? "(اختياري)" : "(Optional)"}
-          </span>
+          {variant === "contact" ? (
+            <span className="contact-required-mark" aria-hidden="true">*</span>
+          ) : (
+            <span className="contact-optional-tag">
+              {ar ? "(اختياري)" : "(Optional)"}
+            </span>
+          )}
         </label>
         <input
           id="contact-email"
           name="email"
           type="email"
+          required={variant === "contact"}
           dir="ltr"
           defaultValue={state.values?.email ?? ""}
           placeholder="name@example.com"
@@ -651,7 +659,7 @@ export function GlobalContactForm({
                 </div>
                 <div className="contact-card-hotline-text">
                   <span className="contact-card-hotline-label">
-                    {ar ? `اتصل على ${hotlineDisplay}` : `Call ${hotlineDisplay}`}
+                    {ar ? "الخط الساخن" : "Hotline"}
                   </span>
                   <strong className="contact-card-hotline-num" dir="ltr">
                     {hotlineDisplay}

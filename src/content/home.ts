@@ -36,7 +36,24 @@ export type HomeContent = {
   opening?: { enabled: boolean; headline: string; desktopVideo?: string; mobileVideo?: string; poster?: string };
   projectsOpening?: { enabled: boolean; headline: string };
   projectsHero?: { enabled?: boolean; eyebrow?: string; title?: string; description?: string; imageUrl?: string; image?: string; mobileImageUrl?: string; focalPoint?: string; imageAlt?: string; primaryCta?: string; secondaryCta?: string };
-  hero: { enabled?: boolean; eyebrow: string; title: string[]; note: string; scroll: string; image?: string; mobileImage?: string; desktopVideo?: string; mobileVideo?: string; poster?: string; alt?: string };
+  hero: {
+    enabled?: boolean;
+    eyebrow: string;
+    title: string[];
+    note: string;
+    scroll: string;
+    mediaType?: "IMAGE" | "VIDEO";
+    image?: string;
+    focalPoint?: string;
+    mobileMediaType?: "INHERIT" | "IMAGE" | "VIDEO";
+    mobileImage?: string;
+    mobileFocalPoint?: string;
+    desktopVideo?: string;
+    mobileVideo?: string;
+    poster?: string;
+    mobilePoster?: string;
+    alt?: string;
+  };
   about: { enabled: boolean; eyebrow: string; title: string; intro: string; milestones: { id: string; year: string; title: string; body: string; image: string; alt: string }[] };
   projects: {
     id?: string;
@@ -296,6 +313,7 @@ export type ProjectDetailData = {
   latitude?: number;
   longitude?: number;
   mapUrl?: string;
+  mapEmbedUrl?: string;
   projectCode?: string;
   address?: string;
   directionsUrl?: string;

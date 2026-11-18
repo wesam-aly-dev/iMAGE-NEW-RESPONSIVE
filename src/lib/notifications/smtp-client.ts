@@ -297,7 +297,7 @@ export async function sendViaSmtp(options: EmailSendOptions, config: SmtpConfig)
 
     return {
       success: true,
-      status: "DELIVERED",
+      status: "ACCEPTED",
       messageId: `smtp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       provider: "smtp",
     };

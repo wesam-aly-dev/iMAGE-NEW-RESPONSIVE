@@ -47,7 +47,8 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
     openEnquiry({
       projectId: project.id,
       projectName: unitName ? `${project.name} — ${unitName}` : project.name,
-      enquiryType: "project",
+      enquiryType: unitName ? "unit" : "register_interest",
+      unitType: unitName,
       sourcePage: `/${copy.locale}/projects/${project.slug}`,
       sourceCta: unitName ? `unit-details-${unitName}` : "project-hero-register",
     });
@@ -450,55 +451,128 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
                   </h2>
                 </div>
 
-                <div className="location-grid">
-                  <div className="location-map-wrap">
-                    {project.latitude && project.longitude ? (
-                      <iframe
-                        title={`${project.name} Map`}
-                        src={`https://maps.google.com/maps?q=${project.latitude},${project.longitude}&z=14&output=embed`}
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0, minHeight: 340, borderRadius: "var(--image-radius)" }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                      />
-                    ) : (
-                      <div className="map-placeholder">
-                        <p>{project.location}</p>
+                {(() => {
+                  const hasLandmarks = Boolean(project.nearbyLocations && project.nearbyLocations.length > 0);
+                  const embedSrc = project.mapEmbedUrl || (project.latitude && project.longitude
+                    ? `https://maps.google.com/maps?q=${project.latitude},${project.longitude}&z=14&output=embed`
+                    : project.mapUrl && (project.mapUrl.includes("output=embed") || project.mapUrl.includes("/embed"))
+                      ? project.mapUrl
+                      : undefined);
+
+                  const directionsTargetUrl = project.directionsUrl || (project.latitude && project.longitude
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${project.latitude},${project.longitude}`
+                    : project.mapUrl || (project.address || project.location
+                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([project.address, project.location].filter(Boolean).join(", "))}`
+                      : undefined));
+
+                  return (
+                    <div className={`location-grid ${!hasLandmarks ? "location-grid--no-landmarks" : ""}`} style={!hasLandmarks ? { gridTemplateColumns: "1fr" } : undefined}>
+                      <div className="location-map-wrap">
+                        {embedSrc ? (
+                          <div className="location-map-container" style={{ position: "relative", width: "100%", height: "100%", minHeight: 340 }}>
+                            <iframe
+                              title={ar ? `خريطة مشروع ${project.name}` : `${project.name} Google Map`}
+                              src={embedSrc}
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0, minHeight: 340, width: "100%", borderRadius: "var(--image-radius)", display: "block" }}
+                              loading="lazy"
+                              referrerPolicy="no-referrer-when-downgrade"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : (
+                          <div className="location-fallback-card" style={{ padding: "36px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 340, background: "var(--surface, #faf7f2)", borderRadius: "var(--image-radius)" }}>
+                            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(42,69,52,0.08)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--forest, #2a4534)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                <circle cx="12" cy="10" r="3" />
+                              </svg>
+                            </div>
+                            <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--forest, #2a4534)", margin: "0 0 6px 0" }}>
+                              {project.name}
+                            </h3>
+                            <p style={{ fontSize: 14, color: "var(--muted, #666)", margin: "0 0 18px 0", maxWidth: 360, lineHeight: 1.5 }}>
+                              {project.address || project.location}
+                            </p>
+                            {directionsTargetUrl && (
+                              <a
+                                href={directionsTargetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-directions"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                                </svg>
+                                <span>{ar ? "فتح الموقع في خرائط Google" : "Open in Google Maps"}</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="location-destinations">
-                    <h3>{ar ? "الوجهات والطرق الرئيسية القريبة" : "Nearby Landmarks & Routes"}</h3>
-                    {project.nearbyLocations && project.nearbyLocations.length > 0 ? (
-                      <ul className="destinations-list">
-                        {project.nearbyLocations.map((dest, i) => (
-                          <li key={i} className="destination-item">
-                            <span className="dest-name">{dest.name}</span>
-                            <strong className="dest-distance">{dest.distance}</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-muted">{ar ? "يقع المشروع بالقرب من المحاور الحيوية." : "Close to major arterial roads and transit routes."}</p>
-                    )}
+                      {hasLandmarks ? (
+                        <div className="location-destinations">
+                          <div>
+                            <h3>{ar ? "الوجهات والطرق الرئيسية القريبة" : "Nearby Landmarks & Routes"}</h3>
+                            {project.address && (
+                              <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 6, marginBottom: 12 }}>
+                                <strong>{ar ? "العنوان:" : "Address:"}</strong> {project.address}
+                              </p>
+                            )}
+                            <ul className="destinations-list" style={{ marginTop: 12 }}>
+                              {project.nearbyLocations!.map((dest, i) => (
+                                <li key={i} className="destination-item">
+                                  <span className="dest-name">{dest.name}</span>
+                                  <strong className="dest-distance">{dest.distance}</strong>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
 
-                    {project.mapUrl && (
-                      <a
-                        href={project.mapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-directions"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                        </svg>
-                        <span>{ar ? "الاتجاهات على الخريطة" : "Get Directions"}</span>
-                      </a>
-                    )}
-                  </div>
-                </div>
+                          {directionsTargetUrl && (
+                            <a
+                              href={directionsTargetUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-directions"
+                              style={{ alignSelf: "flex-start", marginTop: 16 }}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                              </svg>
+                              <span>{ar ? "الاتجاهات على الخريطة" : "Get Directions"}</span>
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        (project.address || directionsTargetUrl) && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px", padding: "16px 20px", background: "#ffffff", border: "1px solid var(--line)", borderRadius: "var(--image-radius)", marginTop: "12px" }}>
+                            {project.address && (
+                              <span style={{ fontSize: 14, color: "var(--forest, #2a4534)", fontWeight: 500 }}>
+                                <strong>{ar ? "العنوان:" : "Address:"}</strong> {project.address}
+                              </span>
+                            )}
+                            {directionsTargetUrl && (
+                              <a
+                                href={directionsTargetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-directions"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                                </svg>
+                                <span>{ar ? "الاتجاهات على الخريطة" : "Get Directions"}</span>
+                              </a>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                })()}
               </section>
 
               {/* 8. Construction Updates */}

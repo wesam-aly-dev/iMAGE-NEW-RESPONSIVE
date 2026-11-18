@@ -3,7 +3,7 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { siteMedia, type HomeContent } from "@/content/home";
 import { SiteHeader } from "./site-header";
 import { Reveal } from "./motion-reveal";
@@ -51,46 +51,245 @@ function Media({
   );
 }
 
-function HeroMedia({ copy, playVideo }: { copy: HomeContent; playVideo: boolean }) {
-  const [mobile, setMobile] = useState(false);
-  const [failedSource, setFailedSource] = useState<string>();
-  useEffect(() => { const query = window.matchMedia("(max-width: 700px)"); const sync = () => setMobile(query.matches); sync(); query.addEventListener("change", sync); return () => query.removeEventListener("change", sync) }, []);
-  const video = mobile ? (copy.hero.mobileVideo || copy.hero.desktopVideo) : copy.hero.desktopVideo;
-  const selectedProjectImage = copy.openingProject?.image;
-  const image = selectedProjectImage || (mobile ? (copy.hero.mobileImage || copy.hero.image) : (copy.hero.image || copy.hero.mobileImage));
-  if (playVideo && video && failedSource !== video) return <video key={video} src={video} autoPlay muted loop playsInline preload="auto" poster={copy.hero.poster || image} onError={() => setFailedSource(video)} />;
-  return <Media src={image || copy.hero.poster} alt={copy.hero.alt} priority />;
+export function resolveHeroMedia(copy: HomeContent, isMobile: boolean) {
+  const desktopType: "IMAGE" | "VIDEO" = copy.hero.mediaType || (copy.hero.desktopVideo ? "VIDEO" : "IMAGE");
+  const mobileSetting = copy.hero.mobileMediaType || "INHERIT";
+
+  let effectiveType: "IMAGE" | "VIDEO" = desktopType;
+  if (isMobile) {
+    if (mobileSetting === "INHERIT") {
+      effectiveType = desktopType;
+    } else {
+      effectiveType = mobileSetting;
+    }
+  }
+
+  if (effectiveType === "VIDEO") {
+    const isMobileOverride = isMobile && mobileSetting === "VIDEO";
+    const videoUrl = isMobileOverride
+      ? (copy.hero.mobileVideo || copy.hero.desktopVideo)
+      : copy.hero.desktopVideo;
+    const posterUrl = isMobileOverride
+      ? (copy.hero.mobilePoster || copy.hero.poster || copy.hero.mobileImage || copy.hero.image)
+      : (copy.hero.poster || copy.hero.image);
+    const focalPoint = isMobileOverride
+      ? (copy.hero.mobileFocalPoint || copy.hero.focalPoint || "center")
+      : (copy.hero.focalPoint || "center");
+
+    return {
+      type: "VIDEO" as const,
+      videoUrl,
+      posterUrl,
+      imageUrl: undefined,
+      focalPoint,
+      alt: copy.hero.alt || "Image Developments Hero",
+    };
+  }
+
+  // IMAGE
+  const isMobileOverride = isMobile && mobileSetting === "IMAGE";
+  const imageUrl = isMobileOverride
+    ? (copy.hero.mobileImage || copy.hero.image)
+    : copy.hero.image;
+  const focalPoint = isMobileOverride
+    ? (copy.hero.mobileFocalPoint || copy.hero.focalPoint || "center")
+    : (copy.hero.focalPoint || "center");
+
+  return {
+    type: "IMAGE" as const,
+    videoUrl: undefined,
+    posterUrl: undefined,
+    imageUrl,
+    focalPoint,
+    alt: copy.hero.alt || "Image Developments Hero",
+  };
 }
 
-function Hero({ copy }: { copy: HomeContent }) {
-  const ref = useRef<HTMLElement>(null);
-  const [videoRequested, setVideoRequested] = useState(false);
+function HeroMedia({
+  copy,
+  videoRef,
+  videoPlaying,
+  setVideoPlaying,
+  toggleVideo,
+  canPlayVideo,
+}: {
+  copy: HomeContent;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  videoPlaying: boolean;
+  setVideoPlaying: (playing: boolean) => void;
+  toggleVideo: () => void;
+  canPlayVideo: boolean;
+}) {
   const [mobile, setMobile] = useState(false);
+  const [failedVideoSource, setFailedVideoSource] = useState<string>();
   const reduce = useReducedMotion();
-  const { introActive, introPhase, isInitialCinematic } = usePageTransition();
+  const isAr = copy.locale === "ar";
 
   useEffect(() => {
-    const query = window.matchMedia("(max-width: 700px)");
+    const query = window.matchMedia("(max-width: 768px)");
     const sync = () => setMobile(query.matches);
     sync();
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
 
-  const video = mobile ? (copy.hero.mobileVideo || copy.hero.desktopVideo) : copy.hero.desktopVideo;
+  const media = resolveHeroMedia(copy, mobile);
+
+  // Background Autoplay execution
+  useEffect(() => {
+    if (media.type !== "VIDEO" || !media.videoUrl || failedVideoSource === media.videoUrl) return;
+    const video = videoRef.current;
+    if (!video || !canPlayVideo || reduce) return;
+
+    video.defaultMuted = true;
+    video.muted = true;
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          setVideoPlaying(true);
+        })
+        .catch(() => {
+          // Autoplay blocked by browser policy
+          setVideoPlaying(false);
+        });
+    }
+  }, [media.type, media.videoUrl, canPlayVideo, reduce, failedVideoSource, setVideoPlaying, videoRef]);
+
+  if (media.type === "VIDEO" && media.videoUrl && failedVideoSource !== media.videoUrl) {
+    return (
+      <div className="hero-video-wrap" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+        <video
+          ref={videoRef}
+          key={media.videoUrl}
+          src={media.videoUrl}
+          poster={media.posterUrl || media.imageUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: media.focalPoint || "center",
+          }}
+          onError={() => {
+            setFailedVideoSource(media.videoUrl);
+            setVideoPlaying(false);
+          }}
+          onPlay={() => setVideoPlaying(true)}
+          onPause={() => setVideoPlaying(false)}
+        />
+        {/* Poster image fallback while video is loading or paused */}
+        {!videoPlaying && (media.posterUrl || media.imageUrl) && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+            }}
+          >
+            <Media
+              src={media.posterUrl || media.imageUrl}
+              alt={media.alt}
+              focalPoint={media.focalPoint}
+              priority
+            />
+          </div>
+        )}
+        {/* Accessible pause/play toggle control for moving background content (WCAG 2.2.2) */}
+        <button
+          type="button"
+          className="hero-video-toggle"
+          onClick={toggleVideo}
+          aria-label={
+            videoPlaying
+              ? (isAr ? "إيقاف مؤقت لخلفية الفيديو" : "Pause background video")
+              : (isAr ? "تشغيل خلفية الفيديو" : "Play background video")
+          }
+          title={
+            videoPlaying
+              ? (isAr ? "إيقاف مؤقت" : "Pause")
+              : (isAr ? "تشغيل" : "Play")
+          }
+        >
+          <span aria-hidden="true">{videoPlaying ? "❚❚" : "▶"}</span>
+        </button>
+      </div>
+    );
+  }
+
+  // If VIDEO failed or media type is IMAGE, render Image with fallback
+  const imageSrc = media.type === "VIDEO"
+    ? (media.posterUrl || copy.hero.poster || copy.hero.image || siteMedia.hero)
+    : (media.imageUrl || copy.hero.image || siteMedia.hero);
+
+  return (
+    <Media
+      src={imageSrc}
+      alt={media.alt}
+      focalPoint={media.focalPoint}
+      priority
+    />
+  );
+}
+
+function Hero({ copy }: { copy: HomeContent }) {
+  if (copy.hero.enabled === false) return null;
+
+  const ref = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const reduce = useReducedMotion();
+  const { introPhase, isInitialCinematic } = usePageTransition();
+  const isAr = copy.locale === "ar";
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 768px)");
+    const sync = () => setMobile(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  const heroMedia = resolveHeroMedia(copy, mobile);
+  const isVideoConfigured = heroMedia.type === "VIDEO" && Boolean(heroMedia.videoUrl);
+
+  const toggleVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.defaultMuted = true;
+      video.muted = true;
+      video.play().then(() => {
+        setVideoPlaying(true);
+      }).catch(() => {
+        setVideoPlaying(false);
+      });
+    } else {
+      video.pause();
+      setVideoPlaying(false);
+    }
+  }, []);
+
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const scrollScale = useTransform(scrollYProgress, [0, 1], [1.0, reduce ? 1.0 : 1.08]);
   const copyY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 110]);
   const opacity = useTransform(scrollYProgress, [0, 0.78], [1, 0.15]);
 
-  // Entrance trigger latch: once triggered by loader exit or non-cinematic mount, stay revealed
-  const [revealed, setRevealed] = useState(() => !isInitialCinematic || Boolean(reduce));
+  // Entrance trigger latch: once triggered by loader exit, non-cinematic mount, or opening disabled, stay revealed
+  const [revealed, setRevealed] = useState(() => !isInitialCinematic || Boolean(reduce) || copy.opening?.enabled === false);
 
   useEffect(() => {
-    if (introPhase === "expanding" || introPhase === "done" || !isInitialCinematic || reduce) {
+    if (introPhase === "expanding" || introPhase === "done" || !isInitialCinematic || reduce || copy.opening?.enabled === false) {
       setRevealed(true);
     }
-  }, [introPhase, isInitialCinematic, reduce]);
+  }, [introPhase, isInitialCinematic, reduce, copy.opening?.enabled]);
 
   // Safety fallback: ensure hero content is never left hidden if a lifecycle callback stalls
   useEffect(() => {
@@ -100,7 +299,8 @@ function Hero({ copy }: { copy: HomeContent }) {
     return () => clearTimeout(safety);
   }, []);
 
-  const animateEntrance = isInitialCinematic && !reduce;
+  const animateEntrance = isInitialCinematic && !reduce && copy.opening?.enabled !== false;
+  const canPlayVideo = !isInitialCinematic || introPhase === "expanding" || introPhase === "done" || copy.opening?.enabled === false;
 
   return (
     <section id="top" ref={ref} className="mm-hero" style={{ backgroundColor: `rgb(${copy.backgrounds.hero})` }}>
@@ -128,7 +328,14 @@ function Hero({ copy }: { copy: HomeContent }) {
             ease: HERO_TIMING.background.ease,
           }}
         >
-          <HeroMedia copy={copy} playVideo={videoRequested} />
+          <HeroMedia
+            copy={copy}
+            videoRef={videoRef}
+            videoPlaying={videoPlaying}
+            setVideoPlaying={setVideoPlaying}
+            toggleVideo={toggleVideo}
+            canPlayVideo={canPlayVideo}
+          />
         </motion.div>
       </motion.div>
 
@@ -166,12 +373,12 @@ function Hero({ copy }: { copy: HomeContent }) {
 
         {/* CTA Buttons: 1400–2050ms, staggered by 120ms */}
         <div className="mm-hero-actions">
-          {video && (
+          {isVideoConfigured && (
             <motion.button
               type="button"
               className="round-play"
-              aria-label={copy.locale === "ar" ? "تشغيل الفيديو" : "Play video"}
-              onClick={() => setVideoRequested(true)}
+              aria-label={videoPlaying ? (isAr ? "إيقاف مؤقت للفيديو" : "Pause video") : (isAr ? "تشغيل الفيديو" : "Play video")}
+              onClick={toggleVideo}
               style={{ pointerEvents: revealed ? "auto" : "none" }}
               initial={animateEntrance ? { opacity: 0, y: mobile ? HERO_TIMING.ctaPrimary.yMobile : HERO_TIMING.ctaPrimary.yDesktop } : false}
               animate={revealed ? { opacity: 1, y: 0 } : { opacity: 0, y: mobile ? HERO_TIMING.ctaPrimary.yMobile : HERO_TIMING.ctaPrimary.yDesktop }}
@@ -181,7 +388,7 @@ function Hero({ copy }: { copy: HomeContent }) {
                 ease: HERO_TIMING.ctaPrimary.ease,
               }}
             >
-              ▶
+              <span aria-hidden="true">{videoPlaying ? "❚❚" : "▶"}</span>
             </motion.button>
           )}
 
@@ -313,7 +520,7 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   const reduce = useReducedMotion();
 
   useEffect(() => {
-    const q = window.matchMedia("(max-width: 800px)");
+    const q = window.matchMedia("(max-width: 900px)");
     const sync = () => setIsMobile(q.matches);
     sync();
     q.addEventListener("change", sync);
@@ -321,8 +528,8 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   }, []);
 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
-  const a = useTransform(scrollYProgress, [0, 1], [80, -80]);
-  const b = useTransform(scrollYProgress, [0, 1], [-40, 100]);
+  const a = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [24, -24]);
+  const b = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [-18, 18]);
 
   // Mobile scroll-driven crossfade opacities for up to 4 images
   const op0 = useTransform(scrollYProgress, [0, 0.22, 0.28], [1, 1, 0]);
@@ -355,10 +562,12 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   ];
 
   // Active slots that have an image URL
+  const hasSlotsConfig = Boolean(copy.lifestyle.slots);
   const activeDesktopSlots = slotDefinitions.filter((s) => s.data && s.data.url);
 
-  // Fallback for tests or setups without slots:
-  const desktopItems = activeDesktopSlots.length > 0
+  // If slots are configured, respect intentional configuration (do not resurrect cleared slots).
+  // Only fall back to legacy single image if slots configuration is completely absent.
+  const desktopItems = hasSlotsConfig
     ? activeDesktopSlots
     : [copy.lifestyle.image, copy.about.milestones[0]?.image, copy.projects[0]?.image, copy.projects[1]?.image]
         .filter(Boolean)
@@ -382,6 +591,11 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   const rawHref = (copy.lifestyle.ctaUrl || "/about").trim();
   const isExternalCta = Boolean(copy.lifestyle.ctaExternal || /^https?:\/\//i.test(rawHref));
   const showCta = copy.lifestyle.ctaEnabled !== false;
+
+  const lifestyleChannels = (copy.backgrounds?.lifestyle ?? "255, 255, 255").split(",").map(v => Number(v.trim()));
+  const isLifestyleLight = lifestyleChannels.length === 3 && lifestyleChannels.every(Number.isFinite)
+    ? (lifestyleChannels[0] * 299 + lifestyleChannels[1] * 587 + lifestyleChannels[2] * 114) / 1000 > 160
+    : true;
 
   let ctaHref: string;
   if (isAboutPage) {
@@ -415,7 +629,14 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
   };
 
   return (
-    <section ref={ref} className="living-story" style={{ backgroundColor: `rgb(${copy.backgrounds.lifestyle})` }}>
+    <section
+      ref={ref}
+      className={`living-story ${isLifestyleLight ? "living-story--light" : ""}`}
+      style={{
+        backgroundColor: `rgb(${copy.backgrounds.lifestyle})`,
+        color: isLifestyleLight ? "var(--forest, #152a20)" : undefined,
+      }}
+    >
       <div className="living-sticky">
         {/* Desktop floating 4-image layout with stable slot assignments */}
         {!isMobile && (
@@ -478,9 +699,11 @@ function LivingStory({ copy, isAboutPage = false }: { copy: HomeContent; isAbout
 
         {/* Center content */}
         <div className="living-centre">
-          <BrandMark />
+          <BrandMark light={!isLifestyleLight} />
           <p className="kicker">{copy.lifestyle.eyebrow}</p>
-          <h2>{copy.lifestyle.title}</h2>
+          <h2 style={{ color: isLifestyleLight ? "var(--forest, #152a20)" : undefined }}>
+            {copy.lifestyle.title}
+          </h2>
           {showCta && (
             <div className="living-cta-wrap">
               {isExternalCta ? (

@@ -32,15 +32,37 @@ function formatExplicitTimestamp(isoString: string): string {
   }
 }
 
+function getFormTypeTitle(formType: FormType | string, isAr: boolean): string {
+  switch (formType) {
+    case "CALLBACK":
+      return isAr ? "طلب معاودة الاتصال" : "Callback Request";
+    case "UNIT_INQUIRY":
+      return isAr ? "استفسار عن وحدة" : "Unit Inquiry";
+    case "REGISTER_INTEREST":
+      return isAr ? "تسجيل اهتمام" : "Register Interest";
+    case "PROJECT_INQUIRY":
+      return isAr ? "استفسار عن مشروع" : "Project Inquiry";
+    case "CAREER_APPLICATION":
+      return isAr ? "طلب توظيف" : "Career Application";
+    case "GENERAL_CONTACT":
+    default:
+      return isAr ? "استفسار عام" : "General Inquiry";
+  }
+}
+
 export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subject: string; text: string; html: string } {
-  // Concise subject line: New Inquiry — [Project or General Inquiry] — [Reference]
-  let subjectScope = "General Inquiry";
+  const isAr = payload.locale === "ar";
+  const formTypeLabel = getFormTypeTitle(payload.formType, isAr);
+
+  let subjectScope = isAr ? "استفسار عام" : "General Inquiry";
   if (payload.projectName) {
     subjectScope = payload.projectName;
   } else if (payload.formType === "CALLBACK") {
-    subjectScope = "Callback Request";
+    subjectScope = isAr ? "طلب معاودة الاتصال" : "Callback Request";
   } else if (payload.formType === "REGISTER_INTEREST") {
-    subjectScope = "Interest Registration";
+    subjectScope = isAr ? "تسجيل اهتمام" : "Interest Registration";
+  } else if (payload.formType === "UNIT_INQUIRY" && payload.unitType) {
+    subjectScope = payload.unitType;
   }
 
   const subject = `New Inquiry — ${subjectScope} — ${payload.referenceNumber}`;
@@ -49,37 +71,49 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
   const cleanAppUrl = appUrl.replace(/\/+$/, "");
   const cmsLeadUrl = cleanAppUrl ? `${cleanAppUrl}/admin/leads?id=${encodeURIComponent(payload.referenceNumber)}` : "";
 
+  const submissionLangDisplay = isAr ? "العربية (Arabic)" : "English";
+
+  // Check if message should be shown (omit placeholder default messages)
+  const isDefaultCallbackMessage =
+    payload.message === "Request a Call Back" ||
+    payload.message === "طلب معاودة الاتصال";
+  const hasCustomMessage = Boolean(payload.message && payload.message.trim() && !isDefaultCallbackMessage);
+
   // Plain-text alternative
   const textLines: string[] = [
     "Image Developments",
-    "New Website Inquiry",
+    isAr ? "إشعار استفسار جديد عبر الموقع" : "New Website Inquiry",
     "-------------------",
     "",
-    "A new inquiry has been received through the website.",
+    isAr
+      ? "تم استلام استفسار جديد عبر الموقع الإلكتروني:"
+      : "A new inquiry has been received through the website.",
     "",
-    `Reference Number: ${payload.referenceNumber}`,
-    `Full Name: ${payload.name}`,
-    `Phone: ${payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : ""}${payload.phone || "Not provided"}`,
+    `${isAr ? "الرقم المرجعي" : "Reference Number"}: ${payload.referenceNumber}`,
+    `${isAr ? "نوع الاستفسار" : "Inquiry Type"}: ${formTypeLabel}`,
+    `${isAr ? "الاسم بالكامل" : "Full Name"}: ${payload.name}`,
+    `${isAr ? "رقم الهاتف" : "Phone"}: ${payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : ""}${payload.phone || (isAr ? "غير محدد" : "Not provided")}`,
   ];
 
   if (payload.email && payload.email.trim()) {
-    textLines.push(`Email: ${payload.email.trim()}`);
+    textLines.push(`${isAr ? "البريد الإلكتروني" : "Email"}: ${payload.email.trim()}`);
   }
   if (payload.projectName) {
-    textLines.push(`Interested Project: ${payload.projectName}`);
+    textLines.push(`${isAr ? "المشروع المطلوب" : "Interested Project"}: ${payload.projectName}`);
   }
   if (payload.unitType) {
-    textLines.push(`Unit Type: ${payload.unitType}`);
+    textLines.push(`${isAr ? "نوع الوحدة" : "Unit Type"}: ${payload.unitType}`);
   }
-  if (payload.message && payload.message.trim() && payload.message !== "Request a Call Back" && payload.message !== "طلب معاودة الاتصال") {
-    textLines.push(`Message: ${payload.message.trim()}`);
+  if (hasCustomMessage) {
+    textLines.push(`${isAr ? "نص الرسالة" : "Message"}: ${payload.message.trim()}`);
   }
-  textLines.push(`Source Form/Page: ${payload.sourcePage || "Website Contact Form"}`);
-  textLines.push(`Submission Date & Time: ${formattedTime}`);
+  textLines.push(`${isAr ? "صفحة التقديم" : "Source Page"}: ${payload.sourcePage || (isAr ? "نموذج التواصل بالموقع" : "Website Contact Form")}`);
+  textLines.push(`${isAr ? "لغة التقديم" : "Submission Language"}: ${submissionLangDisplay}`);
+  textLines.push(`${isAr ? "تاريخ ووقت التقديم" : "Submission Date & Time"}: ${formattedTime}`);
 
   if (cmsLeadUrl) {
     textLines.push("");
-    textLines.push(`View Inquiry in CMS: ${cmsLeadUrl}`);
+    textLines.push(`${isAr ? "عرض الاستفسار في لوحة التحكم" : "View Inquiry in CMS"}: ${cmsLeadUrl}`);
   }
 
   textLines.push("");
@@ -87,15 +121,22 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
 
   const text = textLines.join("\n");
 
-  // HTML responsive template: restrained deep green, white, warm neutral
+  const dir = isAr ? "rtl" : "ltr";
+  const align = isAr ? "right" : "left";
+  const brandName = isAr ? "إيمدج للتطوير العقاري" : "Image Developments";
+  const headerTitle = isAr ? "إشعار استفسار جديد" : "New Website Inquiry";
+  const leadSummary = isAr
+    ? "تم استلام استفسار جديد عبر نماذج الموقع الإلكتروني."
+    : "A new inquiry has been received through the website.";
+
   const html = `<!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="${isAr ? "ar" : "en"}" dir="${dir}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(subject)}</title>
 <style>
-  body { margin: 0; padding: 0; background-color: #f6f7f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #162c20; line-height: 1.5; }
+  body { margin: 0; padding: 0; background-color: #f6f7f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #162c20; line-height: 1.5; direction: ${dir}; text-align: ${align}; }
   .email-container { width: 100%; max-width: 580px; margin: 32px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #dfe4dc; }
   .email-header { background-color: #233d2c; padding: 24px 28px; color: #ffffff; }
   .email-brand { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: #d9965a; margin: 0 0 4px 0; font-weight: 600; }
@@ -104,10 +145,10 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
   .email-summary { font-size: 14px; color: #5e6b63; margin: 0 0 20px 0; line-height: 1.5; }
   .details-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
   .details-table tr { border-bottom: 1px solid #edf1ea; }
-  .details-table td { padding: 10px 0; font-size: 13px; vertical-align: top; }
-  .label-col { width: 150px; color: #5e6b63; font-weight: 500; }
+  .details-table td { padding: 10px 0; font-size: 13px; vertical-align: top; text-align: ${align}; }
+  .label-col { width: 155px; color: #5e6b63; font-weight: 500; }
   .value-col { color: #162c20; font-weight: 600; }
-  .message-block { background-color: #f6f7f3; border-left: 3px solid #d9965a; padding: 12px 16px; margin: 16px 0 24px 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #162c20; }
+  .message-block { background-color: #f6f7f3; border-${isAr ? "right" : "left"}: 3px solid #d9965a; padding: 12px 16px; margin: 16px 0 24px 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #162c20; }
   .action-wrap { text-align: center; margin: 28px 0 12px 0; }
   .action-btn { display: inline-block; background-color: #233d2c; color: #ffffff !important; text-decoration: none; padding: 11px 26px; border-radius: 6px; font-size: 13px; font-weight: 600; }
   .email-footer { background-color: #faf9f6; border-top: 1px solid #dfe4dc; padding: 16px 28px; text-align: center; font-size: 12px; color: #5e6b63; }
@@ -116,65 +157,73 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
 <body>
 <div class="email-container">
   <div class="email-header">
-    <div class="email-brand">Image Developments</div>
-    <h1 class="email-title">New Website Inquiry</h1>
+    <div class="email-brand">${escapeHtml(brandName)}</div>
+    <h1 class="email-title">${escapeHtml(headerTitle)}</h1>
   </div>
   <div class="email-body">
-    <p class="email-summary">A new inquiry has been received through the website.</p>
+    <p class="email-summary">${escapeHtml(leadSummary)}</p>
 
     <table class="details-table" role="presentation">
       <tr>
-        <td class="label-col">Reference Number:</td>
+        <td class="label-col">${isAr ? "الرقم المرجعي:" : "Reference Number:"}</td>
         <td class="value-col" style="font-family: monospace; color: #233d2c;">${escapeHtml(payload.referenceNumber)}</td>
       </tr>
       <tr>
-        <td class="label-col">Full Name:</td>
+        <td class="label-col">${isAr ? "نوع الاستفسار:" : "Inquiry Type:"}</td>
+        <td class="value-col" style="color: #233d2c;">${escapeHtml(formTypeLabel)}</td>
+      </tr>
+      <tr>
+        <td class="label-col">${isAr ? "الاسم بالكامل:" : "Full Name:"}</td>
         <td class="value-col">${escapeHtml(payload.name)}</td>
       </tr>
       <tr>
-        <td class="label-col">Phone:</td>
-        <td class="value-col">
-          ${payload.phone ? `<a href="tel:${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, '')}` : '') + payload.phone)}" style="color: #d9965a; text-decoration: none;">${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, '')} ` : '') + payload.phone)}</a>` : '<span style="color: #999;">Not provided</span>'}
+        <td class="label-col">${isAr ? "رقم الهاتف:" : "Phone:"}</td>
+        <td class="value-col" dir="ltr" style="text-align: ${align};">
+          ${payload.phone ? `<a href="tel:${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")}` : "") + payload.phone)}" style="color: #d9965a; text-decoration: none; font-weight: 600;">${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : "") + payload.phone)}</a>` : `<span style="color: #999;">${isAr ? "غير محدد" : "Not provided"}</span>`}
         </td>
       </tr>
       ${payload.email && payload.email.trim() ? `
       <tr>
-        <td class="label-col">Email:</td>
+        <td class="label-col">${isAr ? "البريد الإلكتروني:" : "Email:"}</td>
         <td class="value-col"><a href="mailto:${escapeHtml(payload.email.trim())}" style="color: #233d2c;">${escapeHtml(payload.email.trim())}</a></td>
       </tr>` : ""}
       ${payload.projectName ? `
       <tr>
-        <td class="label-col">Interested Project:</td>
+        <td class="label-col">${isAr ? "المشروع المطلوب:" : "Interested Project:"}</td>
         <td class="value-col" style="color: #233d2c;">${escapeHtml(payload.projectName)}</td>
       </tr>` : ""}
       ${payload.unitType ? `
       <tr>
-        <td class="label-col">Unit Type:</td>
+        <td class="label-col">${isAr ? "نوع الوحدة:" : "Unit Type:"}</td>
         <td class="value-col">${escapeHtml(payload.unitType)}</td>
       </tr>` : ""}
       <tr>
-        <td class="label-col">Source Form/Page:</td>
+        <td class="label-col">${isAr ? "صفحة التقديم:" : "Source Form/Page:"}</td>
         <td class="value-col" style="font-family: monospace; font-size: 12px; color: #5e6b63;">${escapeHtml(payload.sourcePage || "Website Contact Form")}</td>
       </tr>
       <tr>
-        <td class="label-col">Submission Time:</td>
+        <td class="label-col">${isAr ? "لغة التقديم:" : "Language:"}</td>
+        <td class="value-col">${escapeHtml(submissionLangDisplay)}</td>
+      </tr>
+      <tr>
+        <td class="label-col">${isAr ? "تاريخ التقديم:" : "Submission Time:"}</td>
         <td class="value-col" style="font-size: 12px;">${escapeHtml(formattedTime)}</td>
       </tr>
     </table>
 
-    ${payload.message && payload.message.trim() && payload.message !== "Request a Call Back" && payload.message !== "طلب معاودة الاتصال" ? `
-    <div style="font-size: 12px; font-weight: 600; color: #5e6b63; text-transform: uppercase; margin-top: 16px;">Customer Message:</div>
+    ${hasCustomMessage ? `
+    <div style="font-size: 12px; font-weight: 600; color: #5e6b63; text-transform: uppercase; margin-top: 16px;">${isAr ? "رسالة العميل:" : "Customer Message:"}</div>
     <div class="message-block">${escapeHtml(payload.message.trim())}</div>
     ` : ""}
 
     ${cmsLeadUrl ? `
     <div class="action-wrap">
-      <a href="${escapeHtml(cmsLeadUrl)}" class="action-btn" target="_blank" rel="noopener noreferrer">View Inquiry in CMS &rarr;</a>
+      <a href="${escapeHtml(cmsLeadUrl)}" class="action-btn" target="_blank" rel="noopener noreferrer">${isAr ? "عرض الاستفسار في لوحة التحكم ←" : "View Inquiry in CMS →"}</a>
     </div>
     ` : ""}
   </div>
   <div class="email-footer">
-    Automated notification from Image Developments.
+    ${isAr ? "إشعار تلقائي من إيمدج للتطوير العقاري." : "Automated notification from Image Developments."}
   </div>
 </div>
 </body>
@@ -188,9 +237,7 @@ export function buildCareerEmail(payload: CareerApplicationPayload, appUrl = "")
   const formattedTime = formatExplicitTimestamp(payload.createdAt);
 
   const cleanAppUrl = appUrl.replace(/\/+$/, "");
-  const cvAbsoluteUrl = payload.cvUrl.startsWith("http")
-    ? payload.cvUrl
-    : (cleanAppUrl ? `${cleanAppUrl}${payload.cvUrl}` : payload.cvUrl);
+  const cmsCareerUrl = cleanAppUrl ? `${cleanAppUrl}/admin/careers` : "";
 
   const text = [
     "Image Developments",
@@ -205,15 +252,17 @@ export function buildCareerEmail(payload: CareerApplicationPayload, appUrl = "")
     `Phone: ${payload.phone}`,
     `Email: ${payload.email}`,
     `CV/Resume File: ${payload.cvFilename}`,
-    `Download CV: ${cvAbsoluteUrl}`,
     `Submission Date & Time: ${formattedTime}`,
     ...(payload.notes ? [`Notes: ${payload.notes}`] : []),
     "",
+    cmsCareerUrl ? `View in CMS Careers Portal: ${cmsCareerUrl}` : "",
+    "",
+    "Note: Candidate CV documents remain stored in authenticated private storage.",
     "Automated notification from Image Developments.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -232,6 +281,7 @@ export function buildCareerEmail(payload: CareerApplicationPayload, appUrl = "")
   .value-col { color: #162c20; font-weight: 600; }
   .action-wrap { text-align: center; margin: 28px 0 12px 0; }
   .action-btn { display: inline-block; background-color: #233d2c; color: #ffffff !important; text-decoration: none; padding: 11px 26px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+  .privacy-notice { font-size: 11px; color: #5e6b63; background-color: #f6f7f3; padding: 8px 12px; border-radius: 4px; margin-top: 16px; text-align: center; }
   .email-footer { background-color: #faf9f6; border-top: 1px solid #dfe4dc; padding: 16px 28px; text-align: center; font-size: 12px; color: #5e6b63; }
 </style>
 </head>
@@ -258,7 +308,7 @@ export function buildCareerEmail(payload: CareerApplicationPayload, appUrl = "")
       </tr>
       <tr>
         <td class="label-col">Phone:</td>
-        <td class="value-col"><a href="tel:${escapeHtml(payload.phone)}" style="color: #d9965a; text-decoration: none;">${escapeHtml(payload.phone)}</a></td>
+        <td class="value-col"><a href="tel:${escapeHtml(payload.phone)}" style="color: #d9965a; text-decoration: none; font-weight: 600;">${escapeHtml(payload.phone)}</a></td>
       </tr>
       <tr>
         <td class="label-col">Email:</td>
@@ -272,11 +322,22 @@ export function buildCareerEmail(payload: CareerApplicationPayload, appUrl = "")
         <td class="label-col">Submission Time:</td>
         <td class="value-col" style="font-size: 12px;">${escapeHtml(formattedTime)}</td>
       </tr>
+      ${payload.notes ? `
+      <tr>
+        <td class="label-col">Candidate Notes:</td>
+        <td class="value-col">${escapeHtml(payload.notes)}</td>
+      </tr>` : ""}
     </table>
 
-    <div class="action-wrap">
-      <a href="${escapeHtml(cvAbsoluteUrl)}" class="action-btn" target="_blank" rel="noopener noreferrer">Download / View CV &rarr;</a>
+    <div class="privacy-notice">
+      Security note: CV attachments remain private and are accessible only to authenticated administrators.
     </div>
+
+    ${cmsCareerUrl ? `
+    <div class="action-wrap">
+      <a href="${escapeHtml(cmsCareerUrl)}" class="action-btn" target="_blank" rel="noopener noreferrer">Review in CMS Careers Portal →</a>
+    </div>
+    ` : ""}
   </div>
   <div class="email-footer">
     Automated notification from Image Developments.
@@ -310,6 +371,7 @@ export function buildTestEmail(payload: TestEmailPayload): { subject: string; te
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(subject)}</title>
 <style>
   body { margin: 0; padding: 0; background-color: #f6f7f3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #162c20; }
@@ -330,7 +392,7 @@ export function buildTestEmail(payload: TestEmailPayload): { subject: string; te
     <div class="status-badge">&check; Email Notification Flow Active</div>
     <p style="font-size: 14px; margin-top: 0; color: #162c20;">This email confirms that the notification dispatcher is functional and successfully reaching this recipient mailbox.</p>
     <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin: 16px 0;">
-      <tr><td style="padding: 6px 0; color: #5e6b63;">Target Recipient:</td><td style="font-weight: 600;">${escapeHtml(payload.recipientEmail)}</td></tr>
+      <tr><td style="padding: 6px 0; color: #5e6b63; width: 140px;">Target Recipient:</td><td style="font-weight: 600;">${escapeHtml(payload.recipientEmail)}</td></tr>
       <tr><td style="padding: 6px 0; color: #5e6b63;">Triggered Time:</td><td>${escapeHtml(formattedTime)}</td></tr>
       <tr><td style="padding: 6px 0; color: #5e6b63;">Environment:</td><td>${escapeHtml(payload.environment)}</td></tr>
     </table>

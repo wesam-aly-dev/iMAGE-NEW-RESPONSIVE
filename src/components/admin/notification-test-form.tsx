@@ -1,25 +1,31 @@
 "use client";
 import React, { useActionState } from "react";
-import { testNotificationEmailAction, type ActionState } from "@/app/admin/actions";
+import { testNotificationEmailAction } from "@/app/admin/actions";
 
 interface NotificationTestFormProps {
   defaultEmail: string;
+  savedRecipient?: string;
   lastTestAt?: string | null;
   lastTestResult?: string | null;
   smtpConfigured: boolean;
+  hasResend?: boolean;
 }
 
 export function NotificationTestForm({
   defaultEmail,
+  savedRecipient,
   lastTestAt,
   lastTestResult,
   smtpConfigured,
+  hasResend,
 }: NotificationTestFormProps) {
   const [state, formAction, pending] = useActionState(testNotificationEmailAction, {});
 
+  const isConfigured = smtpConfigured || Boolean(hasResend);
+
   return (
     <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
-      <div style={{ marginBottom: "12px" }}>
+      <div style={{ marginBottom: "16px" }}>
         <h4 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: 600 }}>
           Verify Email Delivery / اختبار إرسال البريد
         </h4>
@@ -28,7 +34,45 @@ export function NotificationTestForm({
         </p>
       </div>
 
-      {!smtpConfigured && (
+      {/* Provider Status Pill */}
+      <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "4px 10px",
+            borderRadius: "16px",
+            fontSize: "12px",
+            fontWeight: 600,
+            backgroundColor: isConfigured ? "#ecfdf5" : "#fffbeb",
+            color: isConfigured ? "#065f46" : "#92400e",
+            border: `1px solid ${isConfigured ? "#a7f3d0" : "#fde68a"}`,
+          }}
+        >
+          <span style={{ fontSize: "10px" }}>{isConfigured ? "●" : "▲"}</span>
+          <span>
+            {hasResend
+              ? "Provider: Resend API"
+              : smtpConfigured
+              ? "Provider: Direct SMTP"
+              : "No Provider Configured (SMTP / Resend missing)"}
+          </span>
+        </div>
+
+        {savedRecipient && (
+          <div
+            style={{
+              fontSize: "12px",
+              color: "var(--muted, #6b7280)",
+            }}
+          >
+            Saved CMS Inquiries Recipient: <strong>{savedRecipient}</strong>
+          </div>
+        )}
+      </div>
+
+      {!isConfigured && (
         <div
           style={{
             padding: "10px 14px",
@@ -93,10 +137,13 @@ export function NotificationTestForm({
                 <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                 <path d="M12 2a10 10 0 0 1 10 10" />
               </svg>
-              Sending...
+              <span>Sending...</span>
             </>
           ) : (
-            "Send Test Email &rarr;"
+            <>
+              <span>Send Test Email</span>
+              <span aria-hidden="true" style={{ fontSize: "14px" }}>→</span>
+            </>
           )}
         </button>
       </form>
@@ -137,10 +184,10 @@ export function NotificationTestForm({
 
       {lastTestAt && (
         <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--muted, #6b7280)" }}>
-          Last automated test: <strong>{new Date(lastTestAt).toLocaleString("en-GB")}</strong>
+          Last test run: <strong>{new Date(lastTestAt).toLocaleString("en-GB")}</strong>
           {lastTestResult && (
-            <div style={{ marginTop: "2px", fontFamily: "monospace", fontSize: "11px" }}>
-              Result: {lastTestResult}
+            <div style={{ marginTop: "2px", fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>
+              {lastTestResult}
             </div>
           )}
         </div>
@@ -148,4 +195,3 @@ export function NotificationTestForm({
     </div>
   );
 }
-

@@ -109,7 +109,7 @@ describe("GlobalContactForm", () => {
     // Dedicated contact page retains the message textarea
     expect(html).toContain('name="message"');
     expect(html).toContain("Message or Enquiry Details");
-    expect(html).toContain("Send Enquiry");
+    expect(html).toContain("Send Inquiry");
   });
 });
 

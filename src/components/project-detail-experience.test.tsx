@@ -230,5 +230,39 @@ describe("ProjectDetailExperience Component", () => {
     expect(html).toContain("جولة افتراضية");
     expect(html).toContain("مشروعات أخرى");
     expect(html).toContain("سجل اهتمامك");
+    expect(html).toContain("خريطة مشروع سوليا");
+  });
+
+  it("renders Google Maps iframe with accessible title and directions button when coordinates exist", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDetailExperience copy={mockProjectDetailCopy} />
+    );
+
+    expect(html).toContain("Solaya Google Map");
+    expect(html).toContain("maps.google.com/maps?q=31.123,27.891");
+    expect(html).toContain("Get Directions");
+  });
+
+  it("renders rich fallback card with directions link when map coordinates are absent (never an empty box)", () => {
+    const fallbackCopy: ProjectDetailPageContent = {
+      ...mockProjectDetailCopy,
+      project: {
+        ...mockProjectDetailCopy.project,
+        latitude: undefined,
+        longitude: undefined,
+        mapUrl: undefined,
+        mapEmbedUrl: undefined,
+        location: "Gamal abd elnasser axis - 6 october",
+      },
+    };
+
+    const html = renderToStaticMarkup(
+      <ProjectDetailExperience copy={fallbackCopy} />
+    );
+
+    expect(html).toContain("location-fallback-card");
+    expect(html).toContain("Gamal abd elnasser axis - 6 october");
+    expect(html).toContain("Open in Google Maps");
+    expect(html).not.toContain("class=\"map-placeholder\"");
   });
 });

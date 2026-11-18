@@ -81,12 +81,13 @@
 
 html {
   scroll-behavior: smooth;
-  background: var(--forest);
+  background: #ffffff;
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
-  background: #fff;
+  background: #ffffff;
   color: var(--ink);
   font-family: "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-weight: 300;
@@ -835,11 +836,41 @@ button {
   display: none;
 }
 
+/* Short-screen usability for circular reveal menu (landscape phones & short laptop viewports) */
+@media (max-height: 720px) {
+  .menu-overlay {
+    height: calc(100svh - 16px);
+    max-height: calc(100svh - 16px);
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 20px 14px;
+  }
+  .menu-grid {
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+    gap: 20px;
+    padding: 4px 1vw 8px;
+  }
+  .menu-nav {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+  .menu-nav a {
+    padding: 8px 0;
+    font-size: clamp(20px, 4.5vh, 28px);
+  }
+  .menu-footer {
+    padding-top: 10px;
+    margin-top: auto;
+  }
+}
+
 
 /* Hero */
 .mm-hero {
   height: 100svh;
-  min-height: 700px;
+  min-height: clamp(540px, 100svh, 840px);
   position: relative;
   overflow: hidden;
   color: #fff
@@ -881,8 +912,8 @@ button {
 .mm-hero h1 {
   font-weight: 300;
   font-size: clamp(58px, 7vw, 104px);
-  line-height: .88;
-  letter-spacing: -.055em;
+  line-height: .98;
+  letter-spacing: -.035em;
   margin: 0
 }
 
@@ -2694,35 +2725,87 @@ html[dir="rtl"] .about-page::after {
 
 .living-image {
   position: absolute;
-  width: 15vw;
-  height: 28vh;
+  width: clamp(160px, 13vw, 220px);
+  height: clamp(200px, 24vh, 290px);
+  border-radius: var(--image-radius, 16px);
   overflow: hidden;
   will-change: transform;
-  backface-visibility: hidden
+  backface-visibility: hidden;
+  box-shadow: 0 16px 36px rgba(10, 24, 16, 0.12);
+  border: 1px solid rgba(42, 69, 52, 0.08);
 }
 
 .living-image img {
-  object-fit: cover
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
 }
 
 .living-image-1 {
-  left: 7vw;
-  top: 9vh
+  left: clamp(24px, 5.5vw, 70px);
+  top: clamp(88px, 12vh, 120px);
 }
 
 .living-image-2 {
-  right: 7vw;
-  top: 10vh
+  right: clamp(24px, 5.5vw, 70px);
+  top: clamp(92px, 13vh, 130px);
 }
 
 .living-image-3 {
-  left: 14vw;
-  bottom: 5vh
+  left: clamp(48px, 10vw, 130px);
+  bottom: clamp(70px, 10vh, 100px);
 }
 
 .living-image-4 {
-  right: 15vw;
-  bottom: 6vh
+  right: clamp(48px, 11vw, 140px);
+  bottom: clamp(65px, 9vh, 95px);
+}
+
+@media (max-width: 900px) {
+  .living-image {
+    display: none !important;
+  }
+}
+
+.hero-video-toggle {
+  position: absolute;
+  bottom: 32px;
+  inset-inline-start: 32px;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(10, 24, 16, 0.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.hero-video-toggle:hover {
+  background: rgba(10, 24, 16, 0.85);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.hero-video-toggle:focus-visible {
+  outline: 2px solid var(--peach, #f2b985);
+  outline-offset: 3px;
+}
+
+@media (max-width: 768px) {
+  .hero-video-toggle {
+    bottom: 24px;
+    inset-inline-start: 20px;
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
 }
 
 .living-cta-wrap {
@@ -8204,25 +8287,25 @@ html[dir="rtl"] .about-page-image>span,
 .arabic .living-image-1,
 html[dir="rtl"] .living-image-1 {
   left: auto;
-  right: 7vw
+  right: clamp(24px, 5.5vw, 70px);
 }
 
 .arabic .living-image-2,
 html[dir="rtl"] .living-image-2 {
   right: auto;
-  left: 7vw
+  left: clamp(24px, 5.5vw, 70px);
 }
 
 .arabic .living-image-3,
 html[dir="rtl"] .living-image-3 {
   left: auto;
-  right: 14vw
+  right: clamp(48px, 10vw, 130px);
 }
 
 .arabic .living-image-4,
 html[dir="rtl"] .living-image-4 {
   right: auto;
-  left: 15vw
+  left: clamp(48px, 11vw, 140px);
 }
 
 /* Page builder: per-section style settings (see src/lib/block-settings.ts) */
@@ -11217,7 +11300,7 @@ html[dir="rtl"] .contact-form-title,
 @media (max-width: 900px) {
   .global-contact {
     padding-block: clamp(32px, 5vh, 44px);
-    padding-inline: clamp(20px, 4vw, 24px);
+    padding-inline: var(--pad);
   }
 
   .global-contact-container {

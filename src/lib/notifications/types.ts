@@ -1,11 +1,19 @@
-export type NotificationStatus = "PENDING" | "PROCESSING" | "DELIVERED" | "FAILED" | "BLOCKED" | "SKIPPED";
+export type NotificationStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "ACCEPTED"
+  | "DELIVERED"
+  | "FAILED"
+  | "BLOCKED"
+  | "SKIPPED";
 
 export type FormType =
   | "GENERAL_CONTACT"
   | "CALLBACK"
   | "PROJECT_INQUIRY"
   | "UNIT_INQUIRY"
-  | "REGISTER_INTEREST";
+  | "REGISTER_INTEREST"
+  | "CAREER_APPLICATION";
 
 export interface LeadInquiryPayload {
   referenceNumber: string;

@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     unoptimized: true,
-    qualities: [75, 88, 92],
+    qualities: [75, 88, 90, 92],
     remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }],
   },
   async redirects() {

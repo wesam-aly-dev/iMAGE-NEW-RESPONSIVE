@@ -14,7 +14,7 @@ export interface EnquiryModalProps {
   initialProjectId?: string;
   initialProjectName?: string;
   initialUnitType?: string;
-  enquiryType?: "project" | "general" | "callback" | "visit";
+  enquiryType?: "project" | "general" | "callback" | "visit" | "unit" | "register_interest";
   sourceCta?: string;
   sourcePage?: string;
   triggerRef?: React.RefObject<HTMLElement | null>;
@@ -44,6 +44,13 @@ function EnquiryModalContent({
   const [showProjectPicker, setShowProjectPicker] = useState(!initialProjectId);
   const [consentOverride, setConsentOverride] = useState<boolean | null>(null);
   const [clientConsentError, setClientConsentError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIdempotencyKey(`idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+    }
+  }, [isOpen]);
 
   // Default to true on fresh open, preserve visitor selection or server-returned values
   const consent =
@@ -300,6 +307,7 @@ function EnquiryModalContent({
               <input type="hidden" name="sourcePage" value={sourcePage} />
               <input type="hidden" name="sourceCta" value={sourceCta} />
               <input type="hidden" name="unitType" value={initialUnitType} />
+              <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
               {/* Zero-overflow Anti-spam Honeypot */}
               <input

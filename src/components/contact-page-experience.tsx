@@ -84,7 +84,7 @@ export function ContactPageExperience({ copy }: { copy: ContactPageContent }) {
               <strong className="contact-card-value contact-hotline-val">{hotline}</strong>
               <p className="contact-card-sub">{ar ? "خدمة العملاء والاستفسارات على مدار الأسبوع" : "Customer care & general enquiries"}</p>
               <a href={`tel:${hotline}`} className="contact-card-cta">
-                <span>{ar ? `اتصل بـ ${hotline}` : `Call ${hotline}`}</span>
+                <span>{ar ? "اتصل الآن" : "Call Now"}</span>
                 <span aria-hidden="true">{ar ? "←" : "→"}</span>
               </a>
             </div>

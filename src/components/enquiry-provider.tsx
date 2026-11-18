@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import type { HomeContent } from "@/content/home";
 import { EnquiryModal } from "./enquiry-modal";
 
-export type EnquiryType = "project" | "general" | "callback" | "visit";
+export type EnquiryType = "project" | "general" | "callback" | "visit" | "unit" | "register_interest";
 
 export interface EnquiryOpenOptions {
   projectId?: string;

@@ -17,7 +17,12 @@ vi.mock("./session", () => ({
   getAdminSession: () => mockRequireAdmin(),
 }));
 
-import { saveHomepage } from "@/app/admin/actions";
+import {
+  saveHomepage,
+  applyWhiteThemeToHomepageContentSections,
+  applyWarmThemeToHomepageContentSections,
+  revertHomepageContentColors,
+} from "@/app/admin/actions";
 import { getHomepageContent } from "./content";
 
 describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () => {
@@ -43,9 +48,11 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
 
   function buildValidFormData(h: any): FormData {
     const fd = new FormData();
+    fd.set("has_openingEnabled", "1");
     if (h.openingEnabled) fd.set("openingEnabled", "on");
     fd.set("openingHeadlineEn", h.openingHeadlineEn || "A new perspective");
     fd.set("openingHeadlineAr", h.openingHeadlineAr || "منظور جديد");
+    fd.set("has_heroEnabled", "1");
     fd.set("heroEnabled", "on");
     fd.set("heroEyebrowEn", h.heroEyebrowEn || "Visionary Living");
     fd.set("heroEyebrowAr", h.heroEyebrowAr || "حياة راقية");
@@ -55,16 +62,22 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
     fd.set("heroNoteAr", h.heroNoteAr || "كل وحدة سكنية صُممت بعناية.");
     fd.set("heroDiscoverEn", h.heroDiscoverEn || "Scroll to explore");
     fd.set("heroDiscoverAr", h.heroDiscoverAr || "مرر للاستكشاف");
+    fd.set("heroMediaType", "IMAGE");
     fd.set("heroMediaUrl", h.heroMediaUrl || "/uploads/hero.jpg");
+    fd.set("heroFocalPoint", "center");
+    fd.set("heroMobileMediaType", "INHERIT");
+    fd.set("heroMobileFocalPoint", "center");
     fd.set("heroMediaAltEn", h.heroMediaAltEn || "Hero architectural image");
     fd.set("heroMediaAltAr", h.heroMediaAltAr || "صورة معمارية للواجهة");
 
+    fd.set("has_projectsEnabled", "1");
     fd.set("projectsEnabled", "on");
     fd.set("projectsHeadingEn", h.projectsHeadingEn || "Signature Destinations");
     fd.set("projectsHeadingAr", h.projectsHeadingAr || "وجهاتنا المتميزة");
     fd.set("projectsExploreEn", h.projectsExploreEn || "Explore Project");
     fd.set("projectsExploreAr", h.projectsExploreAr || "اكتشف المشروع");
 
+    fd.set("has_lifestyleEnabled", "1");
     fd.set("lifestyleEnabled", "on");
     fd.set("lifestyleEyebrowEn", h.lifestyleEyebrowEn || "Living Narrative");
     fd.set("lifestyleEyebrowAr", h.lifestyleEyebrowAr || "سرد الحياة");
@@ -77,6 +90,13 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
     fd.set("lifestyleCtaLabelAr", "اكتشف قصتنا");
     fd.set("lifestyleCtaUrl", "/about");
 
+    fd.set("has_statsEnabled", "1");
+    fd.set("statsEnabled", "on");
+
+    fd.set("has_journalEnabled", "1");
+    fd.set("journalEnabled", "on");
+
+    fd.set("has_closingEnabled", "1");
     fd.set("closingEnabled", "on");
     fd.set("closingEyebrowEn", h.closingEyebrowEn || "LET'S TALK");
     fd.set("closingEyebrowAr", h.closingEyebrowAr || "لنتحدث");
@@ -86,6 +106,7 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
     fd.set("closingCtaAr", h.closingCtaAr || "اتصل على 17087");
     fd.set("closingCtaUrl", h.closingCtaUrl || "tel:17087");
 
+    fd.set("has_sectionOrder", "1");
     fd.set("sectionOrder", "projects, lifestyle, stats, journal, closing");
 
     fd.set("openingBackgroundRgb", h.openingBackgroundRgb || "255, 255, 255");
@@ -280,5 +301,152 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
     const arContent = await getHomepageContent("ar");
     expect(arContent.hero.eyebrow).toBe("حياة موثقة بالعربية");
     expect(arContent.lifestyle.title).toBe("مساحات صُممت لحياة حقيقية");
+  });
+
+  it("M. Save exact hero media options payload without Prisma Unknown argument error", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+    fd.set("heroMediaType", "VIDEO");
+    fd.set("heroVideoDesktopUrl", "https://example.com/desktop-hero.mp4");
+    fd.set("heroPosterUrl", "https://example.com/desktop-poster.jpg");
+    fd.set("heroFocalPoint", "top");
+    fd.set("heroMobileMediaType", "IMAGE");
+    fd.set("heroMobileMediaUrl", "https://example.com/mobile-hero.jpg");
+    fd.set("heroMobilePosterUrl", "https://example.com/mobile-poster.jpg");
+    fd.set("heroMobileFocalPoint", "bottom");
+
+    const res = await saveHomepage({}, fd);
+    expect(res.error).toBeUndefined();
+    expect(res.success).toBe("Homepage saved.");
+
+    const updated = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(updated.heroMediaType).toBe("VIDEO");
+    expect(updated.heroVideoDesktopUrl).toBe("https://example.com/desktop-hero.mp4");
+    expect(updated.heroPosterUrl).toBe("https://example.com/desktop-poster.jpg");
+    expect(updated.heroFocalPoint).toBe("top");
+    expect(updated.heroMobileMediaType).toBe("IMAGE");
+    expect(updated.heroMobileMediaUrl).toBe("https://example.com/mobile-hero.jpg");
+    expect(updated.heroMobileFocalPoint).toBe("bottom");
+  });
+
+  it("N. Distinguish missing inputs from false booleans preserving section visibility", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = new FormData();
+    // A partial form that only submits heroEyebrowEn, without has_projectsEnabled or projectsEnabled
+    fd.set("heroEyebrowEn", "Preserve Visibility Test");
+
+    const res = await saveHomepage({}, fd);
+    expect(res.error).toBeUndefined();
+
+    const updated = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    // Section visibility must remain preserved from existing, NOT defaulted to false
+    expect(updated.projectsEnabled).toBe(h.projectsEnabled);
+    expect(updated.lifestyleEnabled).toBe(h.lifestyleEnabled);
+    expect(updated.closingEnabled).toBe(h.closingEnabled);
+  });
+
+  it("O. Explicitly unchecking a section visibility checkbox sets it to false", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+    // Explicitly uncheck projects
+    fd.set("has_projectsEnabled", "1");
+    fd.delete("projectsEnabled");
+
+    const res = await saveHomepage({}, fd);
+    expect(res.error).toBeUndefined();
+
+    const updated = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(updated.projectsEnabled).toBe(false);
+
+    // Restore
+    fd.set("projectsEnabled", "on");
+    await saveHomepage({}, fd);
+  });
+
+  it("P. Apply pure white theme and revert to previous colors", async () => {
+    // First save distinct initial colors
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+    fd.set("projectsBackgroundRgb", "245, 243, 238");
+    fd.set("lifestyleBackgroundRgb", "21, 42, 32");
+    await saveHomepage({}, fd);
+
+    // Apply pure white theme
+    const whiteRes = await applyWhiteThemeToHomepageContentSections({}, new FormData());
+    expect(whiteRes.success).toBeDefined();
+
+    let check = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(check.projectsBackgroundRgb).toBe("255, 255, 255");
+    expect(check.lifestyleBackgroundRgb).toBe("255, 255, 255");
+    expect(check.statsBackgroundRgb).toBe("255, 255, 255");
+    expect(check.closingBackgroundRgb).toBe("255, 255, 255");
+    // Branded dark footer remains preserved
+    expect(check.footerBackgroundRgb).toBe(h.footerBackgroundRgb);
+
+    // Revert previous colors
+    const revertRes = await revertHomepageContentColors({}, new FormData());
+    expect(revertRes.success).toBeDefined();
+
+    check = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(check.projectsBackgroundRgb).toBe("245, 243, 238");
+    expect(check.lifestyleBackgroundRgb).toBe("21, 42, 32");
+  });
+
+  it("Q. Reject non-existent local /uploads/ asset references with clear error", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+    fd.set("lifestyleTopLeftImageUrl", "/uploads/qa-nonexistent-file-999.jpg");
+
+    const res = await saveHomepage({}, fd);
+    expect(res.success).toBeUndefined();
+    expect(res.error).toMatch(/Media Error/i);
+    expect(res.error).toContain("qa-nonexistent-file-999.jpg");
+  });
+
+  it("R. Successfully saves exact user payload from incident NT1UD89B with all real customer upload paths", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+
+    fd.set("heroMediaType", "IMAGE");
+    fd.set("heroMediaUrl", "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c");
+    fd.set("heroMobileMediaType", "INHERIT");
+    fd.set("heroMobileMediaUrl", "/uploads/1795002825882-f25bd72a-e15b-46bb-b94c-5f4bd27aebb9.jpg");
+
+    fd.set("lifestyleTopLeftImageUrl", "/uploads/1795002928875-408d71d0-cd88-4970-b513-272bdc92f3e8.jpg");
+    fd.set("lifestyleTopLeftImageAltEn", "Architectural entrance facade");
+    fd.set("lifestyleTopLeftImageAltAr", "واجهة المدخل المعماري");
+    fd.set("lifestyleTopLeftFocalPoint", "top");
+
+    fd.set("lifestyleTopRightImageUrl", "/uploads/1794927257284-photo-2026-10-21-19-38-21-ffc6f5af.jpg");
+    fd.set("lifestyleTopRightImageAltEn", "Lush landscaped gardens");
+    fd.set("lifestyleTopRightImageAltAr", "حدائق طبيعية غناء");
+    fd.set("lifestyleTopRightFocalPoint", "center");
+
+    fd.set("lifestyleBottomLeftImageUrl", "/uploads/1794705169297-screenshot-2026-11-14-at-9-26-27-pm-1c75ea27.png");
+    fd.set("lifestyleBottomLeftImageAltEn", "Double-height living pavilion");
+    fd.set("lifestyleBottomLeftImageAltAr", "صالة معيشة بارتفاع مزدوج");
+    fd.set("lifestyleBottomLeftFocalPoint", "bottom");
+
+    fd.set("lifestyleBottomRightImageUrl", "/uploads/1794705160483-screenshot-2026-11-14-at-9-57-30-pm-7ae60f02.png");
+    fd.set("lifestyleBottomRightImageAltEn", "Private terrace at dusk");
+    fd.set("lifestyleBottomRightImageAltAr", "شرفة خاصة وقت الغروب");
+    fd.set("lifestyleBottomRightFocalPoint", "right");
+
+    const res = await saveHomepage({}, fd);
+    expect(res.error).toBeUndefined();
+    expect(res.success).toBe("Homepage saved.");
+
+    const updated = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(updated.heroMediaType).toBe("IMAGE");
+    expect(updated.lifestyleTopLeftImageUrl).toBe("/uploads/1795002928875-408d71d0-cd88-4970-b513-272bdc92f3e8.jpg");
+    expect(updated.lifestyleTopRightImageUrl).toBe("/uploads/1794927257284-photo-2026-10-21-19-38-21-ffc6f5af.jpg");
+    expect(updated.lifestyleBottomLeftImageUrl).toBe("/uploads/1794705169297-screenshot-2026-11-14-at-9-26-27-pm-1c75ea27.png");
+    expect(updated.lifestyleBottomRightImageUrl).toBe("/uploads/1794705160483-screenshot-2026-11-14-at-9-57-30-pm-7ae60f02.png");
+
+    const publicEn = await getHomepageContent("en");
+    expect(publicEn.lifestyle.slots?.topLeft?.url).toBe("/uploads/1795002928875-408d71d0-cd88-4970-b513-272bdc92f3e8.jpg");
+    expect(publicEn.lifestyle.slots?.topRight?.url).toBe("/uploads/1794927257284-photo-2026-10-21-19-38-21-ffc6f5af.jpg");
+    expect(publicEn.lifestyle.slots?.bottomLeft?.url).toBe("/uploads/1794705169297-screenshot-2026-11-14-at-9-26-27-pm-1c75ea27.png");
+    expect(publicEn.lifestyle.slots?.bottomRight?.url).toBe("/uploads/1794705160483-screenshot-2026-11-14-at-9-57-30-pm-7ae60f02.png");
   });
 });

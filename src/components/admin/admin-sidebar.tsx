@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/admin/actions";
@@ -22,6 +23,11 @@ interface NavGroup {
 
 export function AdminSidebar({ userEmail, userName }: AdminSidebarProps) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const navGroups: NavGroup[] = [
     {
@@ -240,10 +246,10 @@ export function AdminSidebar({ userEmail, userName }: AdminSidebarProps) {
   ];
 
   return (
-    <aside className="admin-sidebar" aria-label="CMS Navigation">
+    <aside className={`admin-sidebar ${mobileOpen ? "is-mobile-open" : ""}`} aria-label="CMS Navigation">
       {/* Pinned Top Brand Header */}
       <div className="admin-sidebar-header">
-        <Link className="admin-brand-link" href="/admin" aria-label="Image Developments CMS">
+        <Link className="admin-brand-link" href="/admin" aria-label="Image Developments CMS" onClick={() => setMobileOpen(false)}>
           <div className="admin-brand-identity">
             <svg className="admin-brand-symbol" viewBox="0 0 58 86" aria-hidden="true">
               <path className="brand-symbol-arch" d="M10 29C10 13 18.5 2 29 2s19 11 19 27v22H10V29Z" />
@@ -258,6 +264,25 @@ export function AdminSidebar({ userEmail, userName }: AdminSidebarProps) {
           </div>
           <span className="admin-brand-badge">CMS</span>
         </Link>
+        <button
+          type="button"
+          className="admin-mobile-toggle"
+          onClick={() => setMobileOpen((prev) => !prev)}
+          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileOpen}
+        >
+          {mobileOpen ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Smoothly Scrollable Navigation Links */}
@@ -278,6 +303,7 @@ export function AdminSidebar({ userEmail, userName }: AdminSidebarProps) {
                     key={item.href}
                     className={`admin-nav-link ${isActive ? "is-active" : ""}`}
                     aria-current={isActive ? "page" : undefined}
+                    onClick={() => setMobileOpen(false)}
                   >
                     <span className="admin-nav-icon">{item.icon(isActive)}</span>
                     <span className="admin-nav-label">{item.label}</span>

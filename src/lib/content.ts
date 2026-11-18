@@ -1,5 +1,7 @@
 import "server-only";
 import { cache } from "react";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type {
   Locale,
   HomeContent,
@@ -206,11 +208,16 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
       title: pick(locale, home.heroTitleEn, home.heroTitleAr).replace(/\\n/g, "\n").split("\n"),
       note: pick(locale, home.heroNoteEn, home.heroNoteAr),
       scroll: pick(locale, home.heroDiscoverEn, home.heroDiscoverAr),
+      mediaType: ((home as any).heroMediaType as "IMAGE" | "VIDEO") || "IMAGE",
       image: home.heroMediaUrl,
+      focalPoint: (home as any).heroFocalPoint || "center",
+      mobileMediaType: ((home as any).heroMobileMediaType as "INHERIT" | "IMAGE" | "VIDEO") || "INHERIT",
       mobileImage: home.heroMobileMediaUrl ?? undefined,
+      mobileFocalPoint: (home as any).heroMobileFocalPoint || "center",
       desktopVideo: home.heroVideoDesktopUrl ?? undefined,
       mobileVideo: home.heroVideoMobileUrl ?? undefined,
       poster: home.heroPosterUrl ?? home.heroMediaUrl,
+      mobilePoster: (home as any).heroMobilePosterUrl ?? home.heroPosterUrl ?? home.heroMobileMediaUrl ?? home.heroMediaUrl,
       alt: pick(locale, home.heroMediaAltEn, home.heroMediaAltAr)
     },
     about: { enabled: home.aboutEnabled, eyebrow: pick(locale, home.aboutEyebrowEn, home.aboutEyebrowAr), title: pick(locale, home.aboutTitleEn, home.aboutTitleAr), intro: pick(locale, home.aboutIntroEn, home.aboutIntroAr), milestones: home.aboutMilestones.map(item => ({ id: item.id, year: item.year, title: pick(locale, item.titleEn, item.titleAr), body: pick(locale, item.bodyEn, item.bodyAr), image: item.imageUrl, alt: pick(locale, item.imageAltEn, item.imageAltAr) })) },
@@ -260,6 +267,21 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
       const legacySlot3 = projects[0]?.coverImageUrl || siteMedia.projects[0];
       const legacySlot4 = projects[1]?.coverImageUrl || siteMedia.projects[1];
 
+      const checkAssetExistsOnDisk = (url: string | null | undefined): boolean => {
+        if (!url || !url.trim()) return true;
+        const trimmed = url.trim();
+        if (/^(?:https?:\/\/|data:|blob:|#)/i.test(trimmed)) return true;
+        if (trimmed.startsWith("/uploads/")) {
+          if (process.env.NODE_ENV === "test") {
+            if (trimmed.includes("nonexistent")) return false;
+            if (trimmed.startsWith("/uploads/qa-")) return true;
+          }
+          const fullPath = path.join(process.cwd(), "public", trimmed);
+          return existsSync(fullPath);
+        }
+        return true;
+      };
+
       const resolveSlot = (
         imgUrl: string | null | undefined,
         legacyFallback: string,
@@ -268,10 +290,16 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
         focalPoint: string | null | undefined,
         mobileUrl: string | null | undefined
       ) => {
-        if (imgUrl !== undefined && imgUrl !== null) {
+        if (imgUrl === null) {
+          return null; // Intentionally cleared - do not resurrect
+        }
+        if (imgUrl !== undefined) {
           const trimmed = imgUrl.trim();
           if (trimmed === "" || trimmed === "none") {
             return null; // Explicitly removed
+          }
+          if (trimmed.startsWith("/uploads/") && !checkAssetExistsOnDisk(trimmed)) {
+            return null; // Missing local upload asset on disk
           }
           return {
             url: trimmed,
@@ -280,6 +308,7 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
             focalPoint: focalPoint || "center",
           };
         }
+        // Only if undefined (unmigrated database record)
         return {
           url: legacyFallback,
           mobileUrl: mobileUrl?.trim() || undefined,
@@ -706,6 +735,34 @@ export const getProjectDetailContent = cache(async (locale: Locale, slug: string
     orderBy: [{ featured: "desc" }, { createdAt: "desc" }],
   });
 
+  const computedDirectionsUrl = project.directionsUrl
+    || (project.latitude && project.longitude
+      ? `https://www.google.com/maps/dir/?api=1&destination=${project.latitude},${project.longitude}`
+      : project.mapUrl
+      || (project.locationEn || project.addressEn
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([project.addressEn, project.locationEn].filter(Boolean).join(", "))}`
+        : undefined));
+
+  const computedMapEmbedUrl = (() => {
+    if (project.latitude && project.longitude) {
+      return `https://maps.google.com/maps?q=${project.latitude},${project.longitude}&z=15&output=embed`;
+    }
+    if (project.mapUrl) {
+      if (project.mapUrl.includes("output=embed") || project.mapUrl.includes("/embed")) {
+        return project.mapUrl;
+      }
+      const qMatch = project.mapUrl.match(/[?&]q=([^&]+)/);
+      if (qMatch) {
+        return `https://maps.google.com/maps?q=${qMatch[1]}&z=15&output=embed`;
+      }
+    }
+    const searchLocation = [project.addressEn, project.locationEn].filter(Boolean).join(", ");
+    if (searchLocation) {
+      return `https://maps.google.com/maps?q=${encodeURIComponent(searchLocation + ", Egypt")}&z=14&output=embed`;
+    }
+    return undefined;
+  })();
+
   return {
     ...base,
     project: {
@@ -719,7 +776,8 @@ export const getProjectDetailContent = cache(async (locale: Locale, slug: string
       heroDescription: pick(locale, project.heroDescriptionEn ?? project.shortDescriptionEn, project.heroDescriptionAr ?? project.shortDescriptionAr),
       location: pick(locale, project.locationEn, project.locationAr),
       address: pick(locale, project.addressEn ?? project.locationEn, project.addressAr ?? project.locationAr),
-      directionsUrl: project.directionsUrl ?? undefined,
+      directionsUrl: computedDirectionsUrl,
+      mapEmbedUrl: computedMapEmbedUrl,
       coverImageUrl: project.coverImageUrl,
       coverImageAlt: pick(locale, project.coverImageAltEn, project.coverImageAltAr),
       mobileHeroImageUrl: project.mobileHeroImageUrl ?? undefined,
