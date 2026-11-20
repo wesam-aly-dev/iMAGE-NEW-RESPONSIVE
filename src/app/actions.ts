@@ -11,7 +11,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 function generateReferenceNumber(prefix: "INQ" | "APP"): string {
   const year = new Date().getFullYear();
-  const rand = Math.floor(10000 + Math.random() * 90000);
+  const rand = Math.floor(100000 + Math.random() * 900000);
   return `${prefix}-${year}-${rand}`;
 }
 
@@ -113,24 +113,6 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
         : "Please agree to the Terms & Conditions and Privacy Policy to proceed.";
   }
 
-  // Dedicated General Inquiry Form requires email and message fields
-  const isDedicatedContactPage =
-    values.formVariant === "contact" ||
-    values.sourcePage === "contact-page" ||
-    values.sourceCta === "contact-page-form";
-
-  if (isDedicatedContactPage && (!values.email || values.email.trim().length === 0)) {
-    fieldErrors.email =
-      values.locale === "ar"
-        ? "يرجى إدخال البريد الإلكتروني."
-        : "Please enter your email address.";
-  }
-
-  if (isDedicatedContactPage && (!values.message || values.message.trim().length === 0)) {
-    fieldErrors.message =
-      values.locale === "ar" ? "يرجى كتابة رسالة." : "Please enter a message.";
-  }
-
   if (!parsed.success || Object.keys(fieldErrors).length > 0)
     return {
       status: "error",
@@ -225,6 +207,26 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
     }
   }
 
+  // Prevent duplicate submissions on rapid retry (within 30s with identical name, phone, and source)
+  const fullPhone = `${callingCode} ${parsed.data.phone}`;
+  const recentDuplicate = await prisma.contactSubmission.findFirst({
+    where: {
+      name: parsed.data.name,
+      phone: fullPhone,
+      sourcePage: values.sourcePage || null,
+      createdAt: { gte: new Date(Date.now() - 30 * 1000) },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recentDuplicate) {
+    return {
+      status: "success",
+      message: ar
+        ? `شكراً لك، تم استلام استفسارك مسبقاً برقم مرجعي (${recentDuplicate.referenceNumber || recentDuplicate.id}). سيتواصل معك فريقنا قريباً.`
+        : `Thank you, your enquiry was already received (Ref: ${recentDuplicate.referenceNumber || recentDuplicate.id}). Our team will be in touch shortly.`,
+    };
+  }
+
   // Determine FormType
   let formType: FormType = "GENERAL_CONTACT";
   if (parsed.data.enquiryType === "callback" || values.formVariant === "callback") {
@@ -239,6 +241,9 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
 
   const referenceNumber = generateReferenceNumber("INQ");
   const notificationSettings = await getResolvedNotificationSettings();
+  const cleanCustomerEmail = parsed.data.email && parsed.data.email.trim() ? parsed.data.email.trim() : null;
+  const cleanCustomerName = parsed.data.name.replace(/[\r\n\t]+/g, " ").trim();
+  const notificationSubject = `New Website Inquiry | ${cleanCustomerName} | ${referenceNumber}`;
 
   let submission: { created: unknown; jobId: string };
   try {
@@ -247,8 +252,8 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
         data: {
           referenceNumber,
           name: parsed.data.name,
-          email: parsed.data.email || "",
-          phone: `${callingCode} ${parsed.data.phone}`,
+          email: cleanCustomerEmail,
+          phone: fullPhone,
           countryCode: parsed.data.countryCode,
           projectId: project ? project.id : null,
           projectName: project ? (ar ? project.nameAr : project.nameEn) : null,
@@ -275,7 +280,7 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
         formType,
         formVariant: values.formVariant || null,
         name: parsed.data.name,
-        email: parsed.data.email || "",
+        email: cleanCustomerEmail,
         phone: parsed.data.phone,
         countryCode: callingCode,
         subject,
@@ -297,7 +302,7 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
         targetId: created.id,
         recipientEmail: notificationSettings.recipientEmail,
         senderEmail: notificationSettings.senderEmail,
-        subject: `New Inquiry — ${project ? (ar ? project.nameAr : project.nameEn) : (formType === "CALLBACK" ? (ar ? "طلب معاودة الاتصال" : "Callback Request") : "General Inquiry")} — ${referenceNumber}`,
+        subject: notificationSubject,
         payload: jobPayload,
       });
 

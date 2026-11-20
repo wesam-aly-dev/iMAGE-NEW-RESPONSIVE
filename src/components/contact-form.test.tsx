@@ -116,8 +116,9 @@ describe("GlobalContactForm", () => {
 describe("submitContact Action Validation & Preservation", () => {
   it("submits callback enquiries successfully WITHOUT a message field", async () => {
     const formData = new FormData();
-    formData.append("name", "Nour El-Din");
-    formData.append("phone", "01055554444");
+    const uid = Math.random().toString(36).substring(2, 7);
+    formData.append("name", `Nour El-Din ${uid}`);
+    formData.append("phone", `010${Math.floor(10000000 + Math.random() * 90000000)}`);
     formData.append("countryCode", "EG:+20");
     formData.append("formVariant", "callback");
     formData.append("enquiryType", "callback");
@@ -131,20 +132,21 @@ describe("submitContact Action Validation & Preservation", () => {
     expect(result.message).toContain("your enquiry has been received");
   });
 
-  it("requires message on dedicated contact page variant", async () => {
+  it("allows message to be optional on dedicated contact page variant", async () => {
     const formData = new FormData();
-    formData.append("name", "Nour El-Din");
-    formData.append("phone", "01055554444");
+    const uid = Math.random().toString(36).substring(2, 7);
+    formData.append("name", `Tarek Hassan ${uid}`);
+    formData.append("phone", `010${Math.floor(10000000 + Math.random() * 90000000)}`);
     formData.append("countryCode", "EG:+20");
     formData.append("formVariant", "contact");
     formData.append("consent", "on");
     formData.append("locale", "en");
     formData.append("website", "");
-    // message is missing on dedicated contact page
+    // message is optional even on dedicated contact page
 
     const result = await submitContact({ status: "idle" }, formData);
-    expect(result.status).toBe("error");
-    expect(result.fields?.message).toBe("Please enter a message.");
+    expect(result.status).toBe("success");
+    expect(result.message).toContain("your enquiry has been received");
   });
 
   it("fails when required privacy consent is not checked and preserves values", async () => {

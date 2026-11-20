@@ -26,9 +26,36 @@ export function ContactForm({
 }: ContactFormProps) {
   const [state, action, pending] = useActionState(submitContact, initial);
   const [idempotencyKey, setIdempotencyKey] = React.useState(() => `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+  const [clientEmailError, setClientEmailError] = React.useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const ar = copy.locale === "ar";
   const countries = localizedCallingCodes(copy.locale);
+
+  const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    if (!val) {
+      setClientEmailError(null);
+      return;
+    }
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    if (!isValid) {
+      setClientEmailError(ar ? "يرجى إدخال بريد إلكتروني صحيح." : "Please enter a valid email address.");
+    } else {
+      setClientEmailError(null);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const emailInput = formRef.current?.querySelector<HTMLInputElement>('input[name="email"]');
+    const emailVal = emailInput?.value.trim();
+    if (emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      e.preventDefault();
+      setClientEmailError(ar ? "يرجى إدخال بريد إلكتروني صحيح." : "Please enter a valid email address.");
+      emailInput?.focus();
+      return;
+    }
+    setClientEmailError(null);
+  };
 
   useEffect(() => {
     if (state.status === "success") {
@@ -87,10 +114,13 @@ export function ContactForm({
       : copy.closing.submitLabel ||
         (ar ? "اطلب اتصالاً" : "Request a Call Back");
 
+  const activeEmailError = clientEmailError || state.fields?.email;
+
   return (
     <form
       ref={formRef}
       action={action}
+      onSubmit={handleSubmit}
       className={`contact-form-refined ${variant === "contact" ? "contact-form--full" : ""}`}
       noValidate
     >
@@ -238,42 +268,39 @@ export function ContactForm({
         )}
       </div>
 
-      {/* 3. Email Address — Required in contact mode, Optional in callback mode */}
+      {/* 3. Email Address — Optional in all modes */}
       <div className="contact-form-group">
         <label htmlFor="contact-email" className="contact-label">
           <span>{ar ? "البريد الإلكتروني" : "Email Address"}</span>
-          {variant === "contact" ? (
-            <span className="contact-required-mark" aria-hidden="true">*</span>
-          ) : (
-            <span className="contact-optional-tag">
-              {ar ? "(اختياري)" : "(Optional)"}
-            </span>
-          )}
+          <span className="contact-optional-tag">
+            {ar ? "(اختياري)" : "(Optional)"}
+          </span>
         </label>
         <input
           id="contact-email"
           name="email"
           type="email"
-          required={variant === "contact"}
           dir="ltr"
           defaultValue={state.values?.email ?? ""}
           placeholder="name@example.com"
-          aria-invalid={!!state.fields?.email}
+          onBlur={handleEmailBlur}
+          onChange={() => clientEmailError && setClientEmailError(null)}
+          aria-invalid={!!activeEmailError}
           aria-describedby={
-            state.fields?.email ? "contact-email-error" : undefined
+            activeEmailError ? "contact-email-error" : undefined
           }
           autoComplete="email"
           className={`contact-input contact-input-ltr ${
-            state.fields?.email ? "has-error" : ""
+            activeEmailError ? "has-error" : ""
           }`}
         />
-        {state.fields?.email && (
+        {activeEmailError && (
           <span
             id="contact-email-error"
             className="contact-field-error"
             role="alert"
           >
-            {state.fields.email}
+            {activeEmailError}
           </span>
         )}
       </div>
@@ -336,20 +363,21 @@ export function ContactForm({
         )}
       </div>
 
-      {/* 5. Message Field — ONLY rendered when variant === "contact" (dedicated Contact page) */}
+      {/* 5. Message Field — Optional */}
       {variant === "contact" && (
         <div className="contact-form-group contact-form-group--full">
           <label htmlFor="contact-message" className="contact-label">
             <span>
               {ar ? "رسالتك أو تفاصيل استفسارك" : "Message or Enquiry Details"}
             </span>
-            <span className="contact-required-mark" aria-hidden="true">*</span>
+            <span className="contact-optional-tag">
+              {ar ? "(اختياري)" : "(Optional)"}
+            </span>
           </label>
           <textarea
             id="contact-message"
             name="message"
             rows={4}
-            required
             defaultValue={state.values?.message ?? ""}
             placeholder={
               ar

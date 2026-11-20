@@ -194,7 +194,7 @@ export async function sendViaSmtp(options: EmailSendOptions, config: SmtpConfig)
         host: config.host,
         port: config.port,
         servername: config.host,
-        rejectUnauthorized: process.env.NODE_ENV === "production",
+        rejectUnauthorized: true,
       });
       activeSocket = new SmtpSocket(tlsSock);
     } else {
@@ -226,7 +226,7 @@ export async function sendViaSmtp(options: EmailSendOptions, config: SmtpConfig)
         activeSocket = await activeSocket.upgradeTls({
           host: config.host,
           servername: config.host,
-          rejectUnauthorized: process.env.NODE_ENV === "production",
+          rejectUnauthorized: true,
         });
 
         // Re-issue EHLO after TLS upgrade
@@ -332,7 +332,7 @@ export async function testSmtpConnection(
         host: config.host,
         port: config.port,
         servername: config.host,
-        rejectUnauthorized: process.env.NODE_ENV === "production",
+        rejectUnauthorized: true,
       });
       activeSocket = new SmtpSocket(tlsSock);
     } else {
@@ -363,7 +363,7 @@ export async function testSmtpConnection(
         activeSocket = await activeSocket.upgradeTls({
           host: config.host,
           servername: config.host,
-          rejectUnauthorized: process.env.NODE_ENV === "production",
+          rejectUnauthorized: true,
         });
 
         const postTlsEhlo = await activeSocket.sendCommand(`EHLO ${config.host}`);

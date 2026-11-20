@@ -991,7 +991,7 @@ model ContactSubmission {
   id                   String    @id @default(cuid())
   referenceNumber      String?   @unique
   name                 String
-  email                String
+  email                String?
   phone                String?
   countryCode          String?
   subject              String

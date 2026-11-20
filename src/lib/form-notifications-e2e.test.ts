@@ -390,10 +390,10 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
         createdAt: "2026-11-14T18:30:00.000Z",
       }, "https://imagedevelopments.com");
 
-      expect(email.subject).toBe("New Inquiry — Aera — INQ-2026-99999");
+      expect(email.subject).toBe("New Website Inquiry | Youssef Nabil | INQ-2026-99999");
       expect(email.text).toContain("Reference Number: INQ-2026-99999");
-      expect(email.text).toContain("Full Name: Youssef Nabil");
-      expect(email.text).toContain("Interested Project: Aera");
+      expect(email.text).toContain("Customer Name: Youssef Nabil");
+      expect(email.text).toContain("Project / Interest: Aera");
       expect(email.text).toContain("Unit Type: Villa Type B");
       expect(email.text).toContain("View Inquiry in CMS: https://imagedevelopments.com/admin/leads?id=INQ-2026-99999");
 
@@ -424,7 +424,7 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
       });
       expect(lead).toBeDefined();
       createdLeadIds.push(lead!.id);
-      expect(lead!.email).toBe("");
+      expect(lead!.email).toBeNull();
       expect(lead!.phone).toContain("1023456789");
     });
 
@@ -802,12 +802,12 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
       );
 
       expect(email.subject).toContain("INQ-2026-AR001");
-      expect(email.subject).toContain("إيرا");
+      expect(email.subject).toContain("كريم عبد العزيز");
       expect(email.html).toContain('dir="rtl"');
       expect(email.html).toContain('lang="ar"');
       expect(email.html).toContain("إشعار استفسار جديد");
       expect(email.html).toContain("الرقم المرجعي");
-      expect(email.html).toContain("المشروع المطلوب");
+      expect(email.html).toContain("المشروع / الاهتمام");
       expect(email.html).toContain("نوع الوحدة");
       expect(email.html).toContain("دوبلكس جاردن");
       expect(email.html).toContain("Cairo Time");
@@ -815,7 +815,7 @@ describe("Homepage About/Our Story Images & Form Notifications Suite", () => {
 
       expect(email.text).toContain("الرقم المرجعي: INQ-2026-AR001");
       expect(email.text).toContain("الاسم بالكامل: كريم عبد العزيز");
-      expect(email.text).toContain("المشروع المطلوب: إيرا");
+      expect(email.text).toContain("المشروع / الاهتمام: إيرا");
       expect(email.text).toContain("نوع الوحدة: دوبلكس جاردن");
     });
 

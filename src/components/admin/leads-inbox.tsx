@@ -15,7 +15,7 @@ export interface SerializedLead {
   id: string;
   referenceNumber: string | null;
   name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   countryCode: string | null;
   subject: string;
@@ -110,7 +110,7 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
       const q = searchQuery.toLowerCase().trim();
       const match =
         lead.name.toLowerCase().includes(q) ||
-        lead.email.toLowerCase().includes(q) ||
+        (lead.email ? lead.email.toLowerCase().includes(q) : false) ||
         (lead.phone && lead.phone.toLowerCase().includes(q)) ||
         (lead.referenceNumber && lead.referenceNumber.toLowerCase().includes(q)) ||
         (lead.projectName && lead.projectName.toLowerCase().includes(q)) ||
@@ -522,11 +522,17 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                   {/* Customer Contact */}
                   <td style={{ padding: "10px 14px" }}>
                     <div style={{ fontWeight: 600, color: "var(--ink, #162c20)" }}>{lead.name}</div>
-                    <div style={{ fontSize: "12px", marginTop: "2px" }}>
-                      <a href={`mailto:${lead.email}`} style={{ color: "#2a4534", textDecoration: "underline" }}>
-                        {lead.email}
-                      </a>
-                    </div>
+                    {lead.email ? (
+                      <div style={{ fontSize: "12px", marginTop: "2px" }}>
+                        <a href={`mailto:${lead.email}`} style={{ color: "#2a4534", textDecoration: "underline" }}>
+                          {lead.email}
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "11px", color: "var(--muted, #5e6b63)", marginTop: "2px", fontStyle: "italic" }}>
+                        No email provided
+                      </div>
+                    )}
                     {lead.phone && (
                       <div style={{ fontSize: "12px", marginTop: "2px" }}>
                         <a href={`tel:${lead.phone}`} style={{ color: "#b36f55" }}>
@@ -781,9 +787,13 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "8px", fontSize: "13px" }}>
                 <span style={{ color: "var(--muted, #5e6b63)" }}>Email:</span>
-                <a href={`mailto:${selectedLead.email}`} style={{ color: "#2a4534", fontWeight: 600, textDecoration: "underline" }}>
-                  {selectedLead.email}
-                </a>
+                {selectedLead.email ? (
+                  <a href={`mailto:${selectedLead.email}`} style={{ color: "#2a4534", fontWeight: 600, textDecoration: "underline" }}>
+                    {selectedLead.email}
+                  </a>
+                ) : (
+                  <span style={{ color: "var(--muted, #5e6b63)", fontStyle: "italic" }}>Not provided</span>
+                )}
 
                 <span style={{ color: "var(--muted, #5e6b63)" }}>Phone:</span>
                 {selectedLead.phone ? (

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import path from "node:path";
 import { createSession, destroySession, requireAdmin, invalidateAllUserSessions } from "@/lib/session";
 import { loginSchema, updateUsernameSchema, updatePasswordSchema, newsSchema, projectSchema, safeUrl, sectionOrderSchema } from "@/lib/validation";
@@ -848,11 +848,17 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
 
       // 1. Single Atomic Homepage Update with defensive field validation against runtime Prisma model
       const runtimeFields = (tx as any)._runtimeDataModel?.models?.Homepage?.fields;
+      let allowedFieldNames: Set<string> | null = null;
+      if (Array.isArray(runtimeFields) && runtimeFields.length > 0) {
+        allowedFieldNames = new Set(runtimeFields.map((f: any) => f.name));
+      } else if ((Prisma as any).HomepageScalarFieldEnum) {
+        allowedFieldNames = new Set(Object.keys((Prisma as any).HomepageScalarFieldEnum));
+      }
+
       let safeData: Record<string, any> = homepageUpdate;
       const omittedFields: Record<string, any> = {};
 
-      if (Array.isArray(runtimeFields) && runtimeFields.length > 0) {
-        const allowedFieldNames = new Set(runtimeFields.map((f: any) => f.name));
+      if (allowedFieldNames && allowedFieldNames.size > 0) {
         safeData = {};
         for (const [key, value] of Object.entries(homepageUpdate)) {
           if (allowedFieldNames.has(key)) {
@@ -957,8 +963,9 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
     const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
       ? (() => {
           const lines = error.message.split("\n").map(l => l.trim()).filter(Boolean);
-          const failureReason = lines.find(l => l.includes("Unknown argument") || l.includes("Argument ") || l.includes("Field ") || l.includes("Unique constraint"))
-            || lines.filter(l => !l.includes("~~~") && !l.startsWith("{") && !l.startsWith("}")).slice(0, 2).join(" - ");
+          const failureReason = lines.find(l => /unknown argument|argument|field|unique constraint|foreign key|constraint|column|syntax|invalid/i.test(l) && !l.includes("invocation:"))
+            || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l) && !l.startsWith("where:") && !l.startsWith("data:") && !l.includes("invocation:")).pop()
+            || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l)).slice(0, 2).join(" - ");
           return failureReason ? ` [Diagnostic: ${failureReason}]` : "";
         })()
       : "";

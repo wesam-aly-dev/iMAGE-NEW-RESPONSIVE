@@ -50,22 +50,21 @@ function getFormTypeTitle(formType: FormType | string, isAr: boolean): string {
   }
 }
 
+function cleanHeader(val?: string | null): string {
+  if (!val) return "";
+  return String(val).replace(/[\r\n\t]+/g, " ").trim();
+}
+
 export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subject: string; text: string; html: string } {
   const isAr = payload.locale === "ar";
   const formTypeLabel = getFormTypeTitle(payload.formType, isAr);
 
-  let subjectScope = isAr ? "استفسار عام" : "General Inquiry";
-  if (payload.projectName) {
-    subjectScope = payload.projectName;
-  } else if (payload.formType === "CALLBACK") {
-    subjectScope = isAr ? "طلب معاودة الاتصال" : "Callback Request";
-  } else if (payload.formType === "REGISTER_INTEREST") {
-    subjectScope = isAr ? "تسجيل اهتمام" : "Interest Registration";
-  } else if (payload.formType === "UNIT_INQUIRY" && payload.unitType) {
-    subjectScope = payload.unitType;
-  }
+  const safeName = cleanHeader(payload.name) || (isAr ? "عميل" : "Customer");
+  const safeRef = cleanHeader(payload.referenceNumber);
+  const subject = isAr
+    ? `استفسار جديد عبر الموقع | ${safeName} | ${safeRef}`
+    : `New Website Inquiry | ${safeName} | ${safeRef}`;
 
-  const subject = `New Inquiry — ${subjectScope} — ${payload.referenceNumber}`;
   const formattedTime = formatExplicitTimestamp(payload.createdAt);
 
   const cleanAppUrl = appUrl.replace(/\/+$/, "");
@@ -73,11 +72,25 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
 
   const submissionLangDisplay = isAr ? "العربية (Arabic)" : "English";
 
-  // Check if message should be shown (omit placeholder default messages)
+  // Check if message should be shown (omit empty or placeholder default messages)
   const isDefaultCallbackMessage =
+    !payload.message ||
+    !payload.message.trim() ||
     payload.message === "Request a Call Back" ||
     payload.message === "طلب معاودة الاتصال";
-  const hasCustomMessage = Boolean(payload.message && payload.message.trim() && !isDefaultCallbackMessage);
+  const hasCustomMessage = !isDefaultCallbackMessage;
+
+  const phoneDisplay = payload.phone
+    ? `${payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : ""}${payload.phone}`.trim()
+    : (isAr ? "غير محدد" : "Not provided");
+
+  const emailDisplay = payload.email && payload.email.trim()
+    ? payload.email.trim()
+    : (isAr ? "غير محدد" : "Not provided");
+
+  const projectDisplay = payload.projectName && payload.projectName.trim()
+    ? payload.projectName.trim()
+    : (isAr ? "استفسار عام" : "General inquiry");
 
   // Plain-text alternative
   const textLines: string[] = [
@@ -91,20 +104,16 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
     "",
     `${isAr ? "الرقم المرجعي" : "Reference Number"}: ${payload.referenceNumber}`,
     `${isAr ? "نوع الاستفسار" : "Inquiry Type"}: ${formTypeLabel}`,
-    `${isAr ? "الاسم بالكامل" : "Full Name"}: ${payload.name}`,
-    `${isAr ? "رقم الهاتف" : "Phone"}: ${payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : ""}${payload.phone || (isAr ? "غير محدد" : "Not provided")}`,
+    `${isAr ? "الاسم بالكامل" : "Customer Name"}: ${payload.name}`,
+    `${isAr ? "رقم الهاتف" : "Phone"}: ${phoneDisplay}`,
+    `${isAr ? "البريد الإلكتروني" : "Email"}: ${emailDisplay}`,
+    `${isAr ? "المشروع / الاهتمام" : "Project / Interest"}: ${projectDisplay}`,
   ];
 
-  if (payload.email && payload.email.trim()) {
-    textLines.push(`${isAr ? "البريد الإلكتروني" : "Email"}: ${payload.email.trim()}`);
-  }
-  if (payload.projectName) {
-    textLines.push(`${isAr ? "المشروع المطلوب" : "Interested Project"}: ${payload.projectName}`);
-  }
   if (payload.unitType) {
     textLines.push(`${isAr ? "نوع الوحدة" : "Unit Type"}: ${payload.unitType}`);
   }
-  if (hasCustomMessage) {
+  if (hasCustomMessage && payload.message) {
     textLines.push(`${isAr ? "نص الرسالة" : "Message"}: ${payload.message.trim()}`);
   }
   textLines.push(`${isAr ? "صفحة التقديم" : "Source Page"}: ${payload.sourcePage || (isAr ? "نموذج التواصل بالموقع" : "Website Contact Form")}`);
@@ -173,25 +182,27 @@ export function buildLeadEmail(payload: LeadInquiryPayload, appUrl = ""): { subj
         <td class="value-col" style="color: #233d2c;">${escapeHtml(formTypeLabel)}</td>
       </tr>
       <tr>
-        <td class="label-col">${isAr ? "الاسم بالكامل:" : "Full Name:"}</td>
+        <td class="label-col">${isAr ? "الاسم بالكامل:" : "Customer Name:"}</td>
         <td class="value-col">${escapeHtml(payload.name)}</td>
       </tr>
       <tr>
         <td class="label-col">${isAr ? "رقم الهاتف:" : "Phone:"}</td>
         <td class="value-col" dir="ltr" style="text-align: ${align};">
-          ${payload.phone ? `<a href="tel:${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")}` : "") + payload.phone)}" style="color: #d9965a; text-decoration: none; font-weight: 600;">${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/^\+/, "")} ` : "") + payload.phone)}</a>` : `<span style="color: #999;">${isAr ? "غير محدد" : "Not provided"}</span>`}
+          ${payload.phone ? `<a href="tel:${escapeHtml((payload.countryCode ? `+${payload.countryCode.replace(/[^\d]/g, "")}` : "") + payload.phone.replace(/[^\d+]/g, ""))}" style="color: #b36f55; text-decoration: none; font-weight: 600;">${escapeHtml(phoneDisplay)}</a>` : `<span style="color: #718076;">${isAr ? "غير محدد" : "Not provided"}</span>`}
         </td>
       </tr>
-      ${payload.email && payload.email.trim() ? `
       <tr>
         <td class="label-col">${isAr ? "البريد الإلكتروني:" : "Email:"}</td>
-        <td class="value-col"><a href="mailto:${escapeHtml(payload.email.trim())}" style="color: #233d2c;">${escapeHtml(payload.email.trim())}</a></td>
-      </tr>` : ""}
-      ${payload.projectName ? `
+        <td class="value-col">
+          ${payload.email && payload.email.trim() ? `<a href="mailto:${escapeHtml(payload.email.trim())}" style="color: #233d2c; text-decoration: underline;">${escapeHtml(payload.email.trim())}</a>` : `<span style="color: #718076; font-style: italic;">${isAr ? "غير محدد" : "Not provided"}</span>`}
+        </td>
+      </tr>
       <tr>
-        <td class="label-col">${isAr ? "المشروع المطلوب:" : "Interested Project:"}</td>
-        <td class="value-col" style="color: #233d2c;">${escapeHtml(payload.projectName)}</td>
-      </tr>` : ""}
+        <td class="label-col">${isAr ? "المشروع / الاهتمام:" : "Project / Interest:"}</td>
+        <td class="value-col">
+          ${payload.projectName && payload.projectName.trim() ? `<span style="color: #233d2c; font-weight: 600;">${escapeHtml(payload.projectName.trim())}</span>` : `<span style="color: #718076; font-style: italic;">${isAr ? "استفسار عام" : "General inquiry"}</span>`}
+        </td>
+      </tr>
       ${payload.unitType ? `
       <tr>
         <td class="label-col">${isAr ? "نوع الوحدة:" : "Unit Type:"}</td>

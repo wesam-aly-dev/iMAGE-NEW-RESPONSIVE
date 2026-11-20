@@ -65,13 +65,13 @@ export default async function Settings() {
           </div>
           <Field
             name="notificationRecipientEmail"
-            label="Inquiries recipient email / بريد استلام استفسارات العملاء (default: awessam311@gmail.com)"
+            label="Inquiries recipient email / بريد استلام استفسارات العملاء (default: info@image-developments.com)"
             type="email"
-            value={s.notificationRecipientEmail || "awessam311@gmail.com"}
+            value={s.notificationRecipientEmail || "info@image-developments.com"}
           />
           <Field
             name="additionalRecipients"
-            label="Additional recipient emails (comma-separated, e.g. info@image-developments.com, optional)"
+            label="Additional recipient emails (comma-separated, optional)"
             value={s.additionalRecipients || ""}
           />
           <Field
@@ -88,9 +88,9 @@ export default async function Settings() {
             />
             <Field
               name="notificationSenderEmail"
-              label="Sender email (From header, e.g. info@image-developments.com)"
+              label="Sender email (From header, e.g. website@image-developments.com)"
               type="email"
-              value={s.notificationSenderEmail || "info@image-developments.com"}
+              value={s.notificationSenderEmail || "website@image-developments.com"}
             />
           </div>
 
@@ -136,8 +136,8 @@ export default async function Settings() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             <Field
               name="smtpUser"
-              label="SMTP Username (e.g. info@image-developments.com)"
-              value={s.smtpUser || "info@image-developments.com"}
+              label="SMTP Username (e.g. website@image-developments.com)"
+              value={s.smtpUser || "website@image-developments.com"}
             />
             <div className="field">
               <label htmlFor="smtpPassword">
@@ -227,8 +227,8 @@ export default async function Settings() {
           Verify that outgoing notification emails reach the designated recipient inbox.
         </p>
         <NotificationTestForm
-          defaultEmail={s.notificationRecipientEmail || "awessam311@gmail.com"}
-          savedRecipient={s.notificationRecipientEmail || "awessam311@gmail.com"}
+          defaultEmail={s.notificationRecipientEmail || "info@image-developments.com"}
+          savedRecipient={s.notificationRecipientEmail || "info@image-developments.com"}
           lastTestAt={s.lastNotificationTestAt ? s.lastNotificationTestAt.toISOString() : null}
           lastTestResult={s.lastNotificationTestResult}
           smtpConfigured={notificationMeta.smtpConfigured}

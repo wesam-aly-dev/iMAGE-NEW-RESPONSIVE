@@ -449,4 +449,71 @@ describe("Homepage Save & Reliability Regression Suite (Tests A through N)", () 
     expect(publicEn.lifestyle.slots?.bottomLeft?.url).toBe("/uploads/1794705169297-screenshot-2026-11-14-at-9-26-27-pm-1c75ea27.png");
     expect(publicEn.lifestyle.slots?.bottomRight?.url).toBe("/uploads/1794705160483-screenshot-2026-11-14-at-9-57-30-pm-7ae60f02.png");
   });
+
+  it("S. Saves and renders exact homepage background colors from CMS screenshot", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+
+    const exactColors = {
+      openingBackgroundRgb: "21, 42, 32",
+      heroBackgroundRgb: "21, 42, 32",
+      projectsBackgroundRgb: "245, 243, 238",
+      aboutBackgroundRgb: "245, 243, 238",
+      lifestyleBackgroundRgb: "21, 42, 32",
+      statsBackgroundRgb: "21, 42, 32",
+      journalBackgroundRgb: "245, 243, 238",
+      closingBackgroundRgb: "21, 42, 32",
+      footerBackgroundRgb: "15, 30, 23",
+    };
+
+    for (const [key, val] of Object.entries(exactColors)) {
+      fd.set(key, val);
+    }
+
+    const res = await saveHomepage({}, fd);
+    expect(res.error).toBeUndefined();
+    expect(res.success).toBe("Homepage saved.");
+
+    const updated = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    expect(updated.openingBackgroundRgb).toBe("21, 42, 32");
+    expect(updated.heroBackgroundRgb).toBe("21, 42, 32");
+    expect(updated.projectsBackgroundRgb).toBe("245, 243, 238");
+    expect(updated.aboutBackgroundRgb).toBe("245, 243, 238");
+    expect(updated.lifestyleBackgroundRgb).toBe("21, 42, 32");
+    expect(updated.statsBackgroundRgb).toBe("21, 42, 32");
+    expect(updated.journalBackgroundRgb).toBe("245, 243, 238");
+    expect(updated.closingBackgroundRgb).toBe("21, 42, 32");
+    expect(updated.footerBackgroundRgb).toBe("15, 30, 23");
+
+    const contentEn = await getHomepageContent("en");
+    expect(contentEn.backgrounds).toEqual({
+      opening: "21, 42, 32",
+      hero: "21, 42, 32",
+      projects: "245, 243, 238",
+      about: "245, 243, 238",
+      lifestyle: "21, 42, 32",
+      stats: "21, 42, 32",
+      journal: "245, 243, 238",
+      closing: "21, 42, 32",
+      footer: "15, 30, 23",
+    });
+
+    const contentAr = await getHomepageContent("ar");
+    expect(contentAr.backgrounds).toEqual(contentEn.backgrounds);
+  });
+
+  it("T. Validates and rejects malformed RGB colors with helpful error feedback", async () => {
+    const h = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
+    const fd = buildValidFormData(h);
+
+    fd.set("heroBackgroundRgb", "999, 100, 50");
+    const resBadHigh = await saveHomepage({}, fd);
+    expect(resBadHigh.success).toBeUndefined();
+    expect(resBadHigh.error).toContain("heroBackgroundRgb as three numbers from 0 to 255");
+
+    fd.set("heroBackgroundRgb", "not-a-color");
+    const resBadText = await saveHomepage({}, fd);
+    expect(resBadText.success).toBeUndefined();
+    expect(resBadText.error).toContain("heroBackgroundRgb as three numbers from 0 to 255");
+  });
 });

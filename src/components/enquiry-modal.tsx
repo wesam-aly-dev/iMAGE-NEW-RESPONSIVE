@@ -44,6 +44,7 @@ function EnquiryModalContent({
   const [showProjectPicker, setShowProjectPicker] = useState(!initialProjectId);
   const [consentOverride, setConsentOverride] = useState<boolean | null>(null);
   const [clientConsentError, setClientConsentError] = useState<string | null>(null);
+  const [clientEmailError, setClientEmailError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
 
   useEffect(() => {
@@ -193,6 +194,21 @@ function EnquiryModalContent({
 
   const { heading, submitLabel } = getHeaderContent();
   const activeConsentError = clientConsentError || state.fields?.consent;
+  const activeEmailError = clientEmailError || state.fields?.email;
+
+  const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    if (!val) {
+      setClientEmailError(null);
+      return;
+    }
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    if (!isValid) {
+      setClientEmailError(ar ? "يرجى إدخال بريد إلكتروني صحيح." : "Please enter a valid email address.");
+    } else {
+      setClientEmailError(null);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     if (!consent) {
@@ -206,7 +222,18 @@ function EnquiryModalContent({
       cb?.focus();
       return;
     }
+
+    const emailInput = formRef.current?.querySelector<HTMLInputElement>('input[name="email"]');
+    const emailVal = emailInput?.value.trim();
+    if (emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      e.preventDefault();
+      setClientEmailError(ar ? "يرجى إدخال بريد إلكتروني صحيح." : "Please enter a valid email address.");
+      emailInput?.focus();
+      return;
+    }
+
     setClientConsentError(null);
+    setClientEmailError(null);
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -420,13 +447,15 @@ function EnquiryModalContent({
                   dir="ltr"
                   defaultValue={state.values?.email ?? ""}
                   placeholder="name@example.com"
-                  aria-invalid={!!state.fields?.email}
+                  onBlur={handleEmailBlur}
+                  onChange={() => clientEmailError && setClientEmailError(null)}
+                  aria-invalid={!!activeEmailError}
                   autoComplete="email"
-                  className={`enquiry-input ${state.fields?.email ? "has-error" : ""}`}
+                  className={`enquiry-input ${activeEmailError ? "has-error" : ""}`}
                 />
-                {state.fields?.email && (
+                {activeEmailError && (
                   <span className="enquiry-field-error" role="alert">
-                    {state.fields.email}
+                    {activeEmailError}
                   </span>
                 )}
               </div>

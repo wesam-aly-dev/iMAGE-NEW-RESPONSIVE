@@ -244,6 +244,7 @@ export function PageTransitionProvider({
     pathname === "/projects";
 
   const isCinematicPage = isHomepage && copy.opening?.enabled === true;
+  const openingBg = copy.backgrounds?.opening ? `rgb(${copy.backgrounds.opening})` : "#152a20";
 
   const { centerImageDesktop, centerImageMobile, panels } = getMontageAssets(copy, isProjectsPage);
 
@@ -577,7 +578,7 @@ export function PageTransitionProvider({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#152a20",
+                  backgroundColor: openingBg,
                   zIndex: 30,
                 }}
               >
@@ -628,7 +629,7 @@ export function PageTransitionProvider({
             style={{
               position: "absolute",
               inset: 0,
-              backgroundColor: "#152a20",
+              backgroundColor: openingBg,
               zIndex: 10,
             }}
           />
@@ -920,7 +921,7 @@ export function PageTransitionProvider({
             position: "fixed",
             inset: 0,
             zIndex: 9998,
-            backgroundColor: "#152a20",
+            backgroundColor: openingBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

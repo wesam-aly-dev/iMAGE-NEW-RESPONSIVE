@@ -68,7 +68,7 @@ export async function resolveActiveSmtpConfig(): Promise<SmtpConfig | null> {
       const port = s.smtpPort || 465;
       const secure = s.smtpEncryption === "SSL" || port === 465;
       const senderName = s.notificationSenderName || "Image Developments";
-      const senderAddr = s.notificationSenderEmail || s.smtpUser || "info@image-developments.com";
+      const senderAddr = s.notificationSenderEmail || s.smtpUser || "website@image-developments.com";
       const from = `"${senderName}" <${senderAddr}>`;
 
       return {
@@ -129,17 +129,18 @@ export async function getResolvedNotificationSettings(): Promise<ResolvedNotific
 
   // Use the recipient setting intended for inquiry notifications.
   // Stored in the database and survives restarts.
-  const rawRecipient = settings?.notificationRecipientEmail?.trim() || process.env.NOTIFICATION_RECIPIENT_EMAIL?.trim() || "awessam311@gmail.com";
-  const primaryRecipient = rawRecipient && rawRecipient.includes("@") ? rawRecipient : null;
+  const rawRecipient = settings?.notificationRecipientEmail?.trim() || process.env.NOTIFICATION_RECIPIENT_EMAIL?.trim() || "info@image-developments.com";
+  const primaryRecipient = rawRecipient && rawRecipient.includes("@") ? rawRecipient : "info@image-developments.com";
 
   const rawCareers = settings?.careersRecipientEmail?.trim();
   const careersRecipient = rawCareers && rawCareers.includes("@") ? rawCareers : primaryRecipient;
 
   const senderEmail =
     settings?.notificationSenderEmail?.trim() ||
+    settings?.smtpUser?.trim() ||
     process.env.SMTP_FROM ||
     process.env.NOTIFICATION_SENDER_EMAIL ||
-    "info@image-developments.com";
+    "website@image-developments.com";
 
   const senderName = settings?.notificationSenderName?.trim() || "Image Developments";
 
@@ -172,7 +173,13 @@ export async function getResolvedNotificationSettings(): Promise<ResolvedNotific
 }
 
 async function sendEmail(options: EmailSendOptions): Promise<EmailDeliveryResult> {
-  // 1. Resend API if configured
+  // 1. Authoritative SMTP if configured (CMS-managed or Environment)
+  const smtpConfig = await resolveActiveSmtpConfig();
+  if (smtpConfig) {
+    return sendViaSmtp(options, smtpConfig);
+  }
+
+  // 2. Secondary fallback: Resend API if configured in environment
   if (process.env.RESEND_API_KEY) {
     try {
       // Use configured sender or verified domain; fallback to onboarding@resend.dev for test sandbox
@@ -223,12 +230,6 @@ async function sendEmail(options: EmailSendOptions): Promise<EmailDeliveryResult
         provider: "resend",
       };
     }
-  }
-
-  // 2. Direct SMTP if configured (CMS-managed or Environment)
-  const smtpConfig = await resolveActiveSmtpConfig();
-  if (smtpConfig) {
-    return sendViaSmtp(options, smtpConfig);
   }
 
   // 3. Neither configured: mark as BLOCKED (honest, clear status - zero fake success simulation)

@@ -20,7 +20,7 @@ export interface LeadInquiryPayload {
   formType: FormType;
   formVariant?: string | null;
   name: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   countryCode?: string | null;
   subject: string;

@@ -5,7 +5,7 @@ import { useState } from "react";
 export type ExportLead = {
   createdAt: string;
   name: string;
-  email: string;
+  email: string | null;
   phone: string;
   subject: string;
   message: string;
@@ -25,7 +25,7 @@ export function leadsToCsv(leads: ExportLead[]) {
   const rows = leads.map((lead) => [
     lead.createdAt,
     lead.name,
-    lead.email,
+    lead.email ?? "",
     lead.phone,
     lead.subject,
     lead.message,
