@@ -62,7 +62,7 @@ export const getPageSections = cache(async (locale: Locale, page: PublicPageKey)
   return sections.map(section => ({ id: section.id, kind: normalizeBlockKind(section.kind), settings: parseBlockSettings(section.settings), layout: normalizePageSectionLayout(section.layout), eyebrow: pick(locale, section.eyebrowEn, section.eyebrowAr), title: pick(locale, section.titleEn, section.titleAr), body: pick(locale, section.bodyEn, section.bodyAr), image: section.imageUrl ?? undefined, imageAlt: pick(locale, section.imageAltEn, section.imageAltAr), ctaLabel: pick(locale, section.ctaLabelEn, section.ctaLabelAr) || undefined, ctaUrl: section.ctaUrl ?? undefined, backgroundRgb: section.backgroundRgb }));
 });
 
-export const getHomepageContent = cache(async (locale: Locale): Promise<HomeContent> => {
+export async function getHomepageContentUncached(locale: Locale): Promise<HomeContent> {
   const supportedLocale: SupportedLocale = locale === "ar" ? "ar" : "en";
   const roles: TypographyRole[] = ["heroHeading", "sectionHeading", "cardTitle", "body", "meta", "tag"];
 
@@ -185,7 +185,41 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
   return {
     locale, dir: locale === "ar" ? "rtl" : "ltr",
     backgrounds: { opening: home.openingBackgroundRgb, hero: home.heroBackgroundRgb, about: home.aboutBackgroundRgb, projects: home.projectsBackgroundRgb, lifestyle: home.lifestyleBackgroundRgb, stats: home.statsBackgroundRgb, journal: home.journalBackgroundRgb, closing: home.closingBackgroundRgb, footer: home.footerBackgroundRgb },
-    opening: { enabled: home.openingEnabled, headline: pick(locale, home.openingHeadlineEn, home.openingHeadlineAr), desktopVideo: home.openingVideoDesktopUrl ?? undefined, mobileVideo: home.openingVideoMobileUrl ?? undefined, poster: home.openingPosterUrl ?? home.heroMediaUrl },
+    opening: {
+      enabled: home.openingEnabled,
+      headline: pick(locale, home.openingHeadlineEn, home.openingHeadlineAr),
+      desktopVideo: home.openingVideoDesktopUrl ?? undefined,
+      mobileVideo: home.openingVideoMobileUrl ?? undefined,
+      poster: home.openingPosterUrl ?? home.heroMediaUrl,
+      mobilePoster: (home as any).openingMobilePosterUrl ?? (home as any).heroMobilePosterUrl ?? home.heroMobileMediaUrl ?? home.heroMediaUrl,
+      slots: [
+        {
+          imageUrl: (home as any).openingSlot1ImageUrl || null,
+          mobileImageUrl: (home as any).openingSlot1MobileImageUrl || null,
+          alt: pick(locale, (home as any).openingSlot1AltEn, (home as any).openingSlot1AltAr) || null,
+        },
+        {
+          imageUrl: (home as any).openingSlot2ImageUrl || null,
+          mobileImageUrl: (home as any).openingSlot2MobileImageUrl || null,
+          alt: pick(locale, (home as any).openingSlot2AltEn, (home as any).openingSlot2AltAr) || null,
+        },
+        {
+          imageUrl: (home as any).openingSlot3ImageUrl || home.heroMediaUrl,
+          mobileImageUrl: (home as any).openingSlot3MobileImageUrl || (home as any).heroMobileMediaUrl || null,
+          alt: pick(locale, (home as any).openingSlot3AltEn || home.heroMediaAltEn, (home as any).openingSlot3AltAr || home.heroMediaAltAr) || null,
+        },
+        {
+          imageUrl: (home as any).openingSlot4ImageUrl || null,
+          mobileImageUrl: (home as any).openingSlot4MobileImageUrl || null,
+          alt: pick(locale, (home as any).openingSlot4AltEn, (home as any).openingSlot4AltAr) || null,
+        },
+        {
+          imageUrl: (home as any).openingSlot5ImageUrl || null,
+          mobileImageUrl: (home as any).openingSlot5MobileImageUrl || null,
+          alt: pick(locale, (home as any).openingSlot5AltEn, (home as any).openingSlot5AltAr) || null,
+        },
+      ],
+    },
     projectsOpening: { enabled: home.projectsOpeningEnabled, headline: pick(locale, home.projectsOpeningHeadlineEn, home.projectsOpeningHeadlineAr) },
     typography: { global: resolvedGlobal, home_projects: resolvedProjects },
     nav: nav
@@ -461,7 +495,9 @@ export const getHomepageContent = cache(async (locale: Locale): Promise<HomeCont
     },
     pageSectionsByPage: pageSections.reduce<Record<string, PageSectionContent[]>>((groups, section) => { (groups[section.page] ??= []).push({ id: section.id, kind: normalizeBlockKind(section.kind), settings: parseBlockSettings(section.settings), layout: normalizePageSectionLayout(section.layout), eyebrow: pick(locale, section.eyebrowEn, section.eyebrowAr), title: pick(locale, section.titleEn, section.titleAr), body: pick(locale, section.bodyEn, section.bodyAr), image: section.imageUrl ?? undefined, imageAlt: pick(locale, section.imageAltEn, section.imageAltAr), ctaLabel: pick(locale, section.ctaLabelEn, section.ctaLabelAr) || undefined, ctaUrl: section.ctaUrl ?? undefined, backgroundRgb: section.backgroundRgb }); return groups }, {}),
   };
-});
+}
+
+export const getHomepageContent = cache(getHomepageContentUncached);
 
 export const getProjectsPageContent = cache(async (locale: Locale): Promise<ProjectsPageContent> => {
   const base = await getHomepageContent(locale);

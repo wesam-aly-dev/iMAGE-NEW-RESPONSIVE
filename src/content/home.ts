@@ -30,10 +30,30 @@ export type LifestyleSlots = {
   bottomRight?: LifestyleSlotData | null;
 };
 
+export type OpeningMontageSlot = {
+  imageUrl?: string | null;
+  mobileImageUrl?: string | null;
+  alt?: string | null;
+};
+
 export type HomeContent = {
   locale: Locale; dir: "ltr" | "rtl"; nav: NavItemContent[];
   backgrounds: { opening: string; hero: string; about: string; projects: string; lifestyle: string; stats: string; journal: string; closing: string; footer: string };
-  opening?: { enabled: boolean; headline: string; desktopVideo?: string; mobileVideo?: string; poster?: string };
+  opening?: {
+    enabled: boolean;
+    headline: string;
+    desktopVideo?: string;
+    mobileVideo?: string;
+    poster?: string;
+    mobilePoster?: string;
+    slots?: [
+      OpeningMontageSlot,
+      OpeningMontageSlot,
+      OpeningMontageSlot,
+      OpeningMontageSlot,
+      OpeningMontageSlot
+    ];
+  };
   projectsOpening?: { enabled: boolean; headline: string };
   projectsHero?: { enabled?: boolean; eyebrow?: string; title?: string; description?: string; imageUrl?: string; image?: string; mobileImageUrl?: string; focalPoint?: string; imageAlt?: string; primaryCta?: string; secondaryCta?: string };
   hero: {

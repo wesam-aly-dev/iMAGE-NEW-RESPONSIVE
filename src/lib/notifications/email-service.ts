@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
-import { getSmtpConfig, sendViaSmtp } from "./smtp-client";
+import { getSmtpConfig, sendViaSmtp, testSmtpConnection, type SmtpConfig } from "./smtp-client";
+import { decryptCredential } from "../crypto";
 import { buildCareerEmail, buildLeadEmail, buildTestEmail } from "./templates";
 import {
   CareerApplicationPayload,
@@ -17,6 +18,14 @@ export interface ResolvedNotificationSettings {
   recipientEmail: string | null;
   careersRecipientEmail: string | null;
   senderEmail: string;
+  senderName: string;
+  additionalRecipients: string[];
+  smtpSource: "CMS" | "ENV";
+  smtpHost: string | null;
+  smtpPort: number;
+  smtpEncryption: string;
+  smtpUser: string | null;
+  hasSmtpPassword: boolean;
   smtpConfigured: boolean;
   hasResend: boolean;
   isConfigured: boolean;
@@ -31,12 +40,69 @@ function sanitizeError(err: unknown): string {
   return str;
 }
 
+export async function resolveActiveSmtpConfig(): Promise<SmtpConfig | null> {
+  try {
+    const s = await prisma.globalSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        smtpActiveSource: true,
+        smtpHost: true,
+        smtpPort: true,
+        smtpEncryption: true,
+        smtpUser: true,
+        smtpPasswordEncrypted: true,
+        smtpPasswordIv: true,
+        smtpPasswordTag: true,
+        notificationSenderEmail: true,
+        notificationSenderName: true,
+      },
+    });
+
+    if (s && (s.smtpActiveSource === "CMS" || (!process.env.SMTP_HOST && s.smtpHost)) && s.smtpHost) {
+      const decryptedPass = decryptCredential({
+        ciphertext: s.smtpPasswordEncrypted,
+        iv: s.smtpPasswordIv,
+        tag: s.smtpPasswordTag,
+      }) || undefined;
+
+      const port = s.smtpPort || 465;
+      const secure = s.smtpEncryption === "SSL" || port === 465;
+      const senderName = s.notificationSenderName || "Image Developments";
+      const senderAddr = s.notificationSenderEmail || s.smtpUser || "info@image-developments.com";
+      const from = `"${senderName}" <${senderAddr}>`;
+
+      return {
+        host: s.smtpHost,
+        port,
+        secure,
+        user: s.smtpUser || undefined,
+        pass: decryptedPass,
+        from,
+        timeoutMs: 15000,
+      };
+    }
+  } catch (err: unknown) {
+    console.error("Notice: Failed to query CMS SMTP settings:", err);
+  }
+
+  // Fallback to environment variables
+  return getSmtpConfig();
+}
+
 export async function getResolvedNotificationSettings(): Promise<ResolvedNotificationSettings> {
   let settings: {
     notificationEmailEnabled?: boolean | null;
     notificationRecipientEmail?: string | null;
     careersRecipientEmail?: string | null;
     notificationSenderEmail?: string | null;
+    notificationSenderName?: string | null;
+    additionalRecipients?: string | null;
+    smtpActiveSource?: string | null;
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+    smtpEncryption?: string | null;
+    smtpUser?: string | null;
+    smtpPasswordEncrypted?: string | null;
   } | null = null;
 
   try {
@@ -47,6 +113,14 @@ export async function getResolvedNotificationSettings(): Promise<ResolvedNotific
         notificationRecipientEmail: true,
         careersRecipientEmail: true,
         notificationSenderEmail: true,
+        notificationSenderName: true,
+        additionalRecipients: true,
+        smtpActiveSource: true,
+        smtpHost: true,
+        smtpPort: true,
+        smtpEncryption: true,
+        smtpUser: true,
+        smtpPasswordEncrypted: true,
       },
     });
   } catch (err: unknown) {
@@ -55,7 +129,7 @@ export async function getResolvedNotificationSettings(): Promise<ResolvedNotific
 
   // Use the recipient setting intended for inquiry notifications.
   // Stored in the database and survives restarts.
-  const rawRecipient = settings?.notificationRecipientEmail?.trim() || process.env.NOTIFICATION_RECIPIENT_EMAIL?.trim();
+  const rawRecipient = settings?.notificationRecipientEmail?.trim() || process.env.NOTIFICATION_RECIPIENT_EMAIL?.trim() || "awessam311@gmail.com";
   const primaryRecipient = rawRecipient && rawRecipient.includes("@") ? rawRecipient : null;
 
   const rawCareers = settings?.careersRecipientEmail?.trim();
@@ -65,17 +139,32 @@ export async function getResolvedNotificationSettings(): Promise<ResolvedNotific
     settings?.notificationSenderEmail?.trim() ||
     process.env.SMTP_FROM ||
     process.env.NOTIFICATION_SENDER_EMAIL ||
-    "notifications@imagedevelopments.com";
+    "info@image-developments.com";
+
+  const senderName = settings?.notificationSenderName?.trim() || "Image Developments";
+
+  const additionalRecipients = (settings?.additionalRecipients || "")
+    .split(/[\s,;]+/)
+    .map(e => e.trim())
+    .filter(e => e && e.includes("@"));
 
   const hasResend = Boolean(process.env.RESEND_API_KEY);
-  const smtpConfig = getSmtpConfig();
-  const smtpConfigured = Boolean(smtpConfig);
+  const activeSmtp = await resolveActiveSmtpConfig();
+  const smtpConfigured = Boolean(activeSmtp);
 
   return {
     enabled: settings?.notificationEmailEnabled ?? true,
     recipientEmail: primaryRecipient,
     careersRecipientEmail: careersRecipient,
     senderEmail,
+    senderName,
+    additionalRecipients,
+    smtpSource: (settings?.smtpActiveSource as "CMS" | "ENV") || "ENV",
+    smtpHost: settings?.smtpHost || null,
+    smtpPort: settings?.smtpPort || 465,
+    smtpEncryption: settings?.smtpEncryption || "SSL",
+    smtpUser: settings?.smtpUser || null,
+    hasSmtpPassword: Boolean(settings?.smtpPasswordEncrypted),
     smtpConfigured,
     hasResend,
     isConfigured: Boolean(primaryRecipient && (smtpConfigured || hasResend)),
@@ -136,8 +225,8 @@ async function sendEmail(options: EmailSendOptions): Promise<EmailDeliveryResult
     }
   }
 
-  // 2. Direct SMTP if configured
-  const smtpConfig = getSmtpConfig();
+  // 2. Direct SMTP if configured (CMS-managed or Environment)
+  const smtpConfig = await resolveActiveSmtpConfig();
   if (smtpConfig) {
     return sendViaSmtp(options, smtpConfig);
   }

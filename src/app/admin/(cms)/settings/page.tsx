@@ -48,9 +48,9 @@ export default async function Settings() {
         </section>
 
         <section className="panel">
-          <h2>Form & Lead Notifications / إشعارات النماذج والمبيعات</h2>
+          <h2>Form &amp; Lead Notifications / إشعارات النماذج والمبيعات</h2>
           <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px", marginBottom: "16px" }}>
-            Configure destination mailboxes for website inquiries, callback requests, and job applications.
+            Configure destination mailboxes, company sender identity, and authenticated SMTP server connection.
           </p>
           <div className="checkbox-row">
             <input
@@ -65,9 +65,14 @@ export default async function Settings() {
           </div>
           <Field
             name="notificationRecipientEmail"
-            label="Inquiries recipient email / بريد استلام استفسارات العملاء"
+            label="Inquiries recipient email / بريد استلام استفسارات العملاء (default: awessam311@gmail.com)"
             type="email"
-            value={s.notificationRecipientEmail || ""}
+            value={s.notificationRecipientEmail || "awessam311@gmail.com"}
+          />
+          <Field
+            name="additionalRecipients"
+            label="Additional recipient emails (comma-separated, e.g. info@image-developments.com, optional)"
+            value={s.additionalRecipients || ""}
           />
           <Field
             name="careersRecipientEmail"
@@ -75,12 +80,78 @@ export default async function Settings() {
             type="email"
             value={s.careersRecipientEmail || ""}
           />
-          <Field
-            name="notificationSenderEmail"
-            label="Sender email override (From header, e.g. notifications@imagedevelopments.com)"
-            type="email"
-            value={s.notificationSenderEmail || ""}
-          />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <Field
+              name="notificationSenderName"
+              label="Sender display name (e.g. Image Developments)"
+              value={s.notificationSenderName || "Image Developments"}
+            />
+            <Field
+              name="notificationSenderEmail"
+              label="Sender email (From header, e.g. info@image-developments.com)"
+              type="email"
+              value={s.notificationSenderEmail || "info@image-developments.com"}
+            />
+          </div>
+
+          <h3 style={{ fontSize: "14px", fontWeight: 600, margin: "20px 0 8px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
+            SMTP Mail Server Settings / إعدادات خادم البريد (SMTP)
+          </h3>
+          <p style={{ color: "var(--muted, #6b7280)", fontSize: "13px", marginTop: "0", marginBottom: "14px" }}>
+            Choose whether to deliver notifications via CMS-managed credentials or server environment variables.
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+            <div className="field">
+              <label htmlFor="smtpActiveSource">Credentials Source</label>
+              <select id="smtpActiveSource" name="smtpActiveSource" defaultValue={s.smtpActiveSource || "ENV"}>
+                <option value="CMS">CMS Managed SMTP (Configured below)</option>
+                <option value="ENV">Server Environment Variables (SMTP_HOST / RESEND_API_KEY)</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="smtpEncryption">Security Protocol</label>
+              <select id="smtpEncryption" name="smtpEncryption" defaultValue={s.smtpEncryption || "SSL"}>
+                <option value="SSL">SSL / Implicit TLS (Port 465 - Recommended)</option>
+                <option value="STARTTLS">STARTTLS (Port 587)</option>
+                <option value="NONE">Plain / None (Port 25)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px" }}>
+            <Field
+              name="smtpHost"
+              label="SMTP Host (e.g. image-developments.com)"
+              value={s.smtpHost || "image-developments.com"}
+            />
+            <Field
+              name="smtpPort"
+              label="SMTP Port (465 for SSL, 587 for STARTTLS)"
+              type="number"
+              value={String(s.smtpPort || 465)}
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <Field
+              name="smtpUser"
+              label="SMTP Username (e.g. info@image-developments.com)"
+              value={s.smtpUser || "info@image-developments.com"}
+            />
+            <div className="field">
+              <label htmlFor="smtpPassword">
+                SMTP Password {Boolean(s.smtpPasswordEncrypted) && <span style={{ color: "#166534", fontWeight: 400 }}>(Password is securely saved)</span>}
+              </label>
+              <input
+                id="smtpPassword"
+                name="smtpPassword"
+                type="password"
+                autoComplete="new-password"
+                placeholder={s.smtpPasswordEncrypted ? "•••••••••••• (Leave blank to keep existing password)" : "Enter SMTP password"}
+              />
+            </div>
+          </div>
         </section>
 
         <SocialLinksEditor initialLinks={s.socialLinks} />
@@ -156,12 +227,17 @@ export default async function Settings() {
           Verify that outgoing notification emails reach the designated recipient inbox.
         </p>
         <NotificationTestForm
-          defaultEmail={s.notificationRecipientEmail || ""}
-          savedRecipient={s.notificationRecipientEmail || ""}
+          defaultEmail={s.notificationRecipientEmail || "awessam311@gmail.com"}
+          savedRecipient={s.notificationRecipientEmail || "awessam311@gmail.com"}
           lastTestAt={s.lastNotificationTestAt ? s.lastNotificationTestAt.toISOString() : null}
           lastTestResult={s.lastNotificationTestResult}
           smtpConfigured={notificationMeta.smtpConfigured}
           hasResend={notificationMeta.hasResend}
+          smtpHost={s.smtpHost}
+          smtpPort={s.smtpPort || 465}
+          smtpEncryption={s.smtpEncryption || "SSL"}
+          smtpUser={s.smtpUser}
+          hasSmtpPassword={Boolean(s.smtpPasswordEncrypted)}
         />
       </section>
 

@@ -61,38 +61,71 @@ let isLanguageSwitching = false;
 /* -------------------------------------------------------------------------- */
 /*                     Image Selection for Intro Montage                      */
 /* -------------------------------------------------------------------------- */
-function getMontageAssets(copy: HomeContent, isProjects?: boolean) {
+export interface MontagePanelAsset {
+  desktop: string;
+  mobile: string;
+  alt: string;
+}
+
+function getMontageAssets(copy: HomeContent, isProjects?: boolean): {
+  centerImageDesktop: string;
+  centerImageMobile: string;
+  panels: MontagePanelAsset[];
+} {
   if (isProjects) {
-    const centerImage =
+    const centerDesktop =
       copy.projectsHero?.imageUrl ||
       copy.projectsHero?.image ||
       copy.projects[0]?.image ||
       "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=2400&q=88";
 
+    const centerMobile =
+      copy.projectsHero?.mobileImageUrl ||
+      centerDesktop;
+
     const pool = copy.projects
       .map((p) => p.image)
-      .filter((src): src is string => Boolean(src && src !== centerImage));
+      .filter((src): src is string => Boolean(src && src !== centerDesktop));
 
     const unique = Array.from(new Set(pool));
-    const p0 = unique[0] || copy.hero.image || centerImage;
-    const p1 = unique[1] || unique[0] || centerImage;
-    const p3 = unique[2] || unique[0] || centerImage;
-    const p4 = unique[3] || unique[1] || centerImage;
+    const p0 = unique[0] || copy.hero.image || centerDesktop;
+    const p1 = unique[1] || unique[0] || centerDesktop;
+    const p3 = unique[2] || unique[0] || centerDesktop;
+    const p4 = unique[3] || unique[1] || centerDesktop;
+
+    const panels: MontagePanelAsset[] = [
+      { desktop: p0, mobile: p0, alt: "" },
+      { desktop: p1, mobile: p1, alt: "" },
+      { desktop: centerDesktop, mobile: centerMobile, alt: copy.projectsHero?.imageAlt || "" },
+      { desktop: p3, mobile: p3, alt: "" },
+      { desktop: p4, mobile: p4, alt: "" },
+    ];
 
     return {
-      centerImage,
-      panels: [p0, p1, centerImage, p3, p4],
+      centerImageDesktop: centerDesktop,
+      centerImageMobile: centerMobile,
+      panels,
     };
   }
 
-  const centerImage =
-    copy.hero.image ||
+  // 1. Center Panel: uses configured slot 3 / opening poster / hero image
+  const centerDesktop =
+    copy.opening?.slots?.[2]?.imageUrl ||
+    copy.opening?.poster ||
     copy.hero.poster ||
+    copy.hero.image ||
     copy.openingProject?.image ||
     copy.projects[0]?.image ||
     "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=2400&q=88";
 
-  // Gather unique available project and lifestyle photos
+  const centerMobile =
+    copy.opening?.slots?.[2]?.mobileImageUrl ||
+    copy.opening?.mobilePoster ||
+    copy.hero.mobilePoster ||
+    copy.hero.mobileImage ||
+    centerDesktop;
+
+  // Fallback pool from published projects/lifestyle
   const pool = [
     copy.projects[1]?.image,
     copy.projects[2]?.image,
@@ -101,20 +134,76 @@ function getMontageAssets(copy: HomeContent, isProjects?: boolean) {
     copy.about?.milestones?.[1]?.image,
     copy.settings?.menuImage,
     copy.projects[0]?.image,
-  ].filter((src): src is string => Boolean(src && src !== centerImage));
+  ].filter((src): src is string => Boolean(src && src !== centerDesktop));
 
   const unique = Array.from(new Set(pool));
 
-  const p0 = unique[0] || centerImage;
-  const p1 = unique[1] || unique[0] || centerImage;
-  const p3 = unique[2] || unique[0] || centerImage;
-  const p4 = unique[3] || unique[1] || centerImage;
+  // Slot 1 (Outer Left)
+  const slot0Desktop = copy.opening?.slots?.[0]?.imageUrl || unique[0] || centerDesktop;
+  const slot0Mobile = copy.opening?.slots?.[0]?.mobileImageUrl || slot0Desktop;
+  const slot0Alt = copy.opening?.slots?.[0]?.alt || "";
+
+  // Slot 2 (Inner Left)
+  const slot1Desktop = copy.opening?.slots?.[1]?.imageUrl || unique[1] || unique[0] || centerDesktop;
+  const slot1Mobile = copy.opening?.slots?.[1]?.mobileImageUrl || slot1Desktop;
+  const slot1Alt = copy.opening?.slots?.[1]?.alt || "";
+
+  // Slot 4 (Inner Right)
+  const slot3Desktop = copy.opening?.slots?.[3]?.imageUrl || unique[2] || unique[0] || centerDesktop;
+  const slot3Mobile = copy.opening?.slots?.[3]?.mobileImageUrl || slot3Desktop;
+  const slot3Alt = copy.opening?.slots?.[3]?.alt || "";
+
+  // Slot 5 (Outer Right)
+  const slot4Desktop = copy.opening?.slots?.[4]?.imageUrl || unique[3] || unique[1] || centerDesktop;
+  const slot4Mobile = copy.opening?.slots?.[4]?.mobileImageUrl || slot4Desktop;
+  const slot4Alt = copy.opening?.slots?.[4]?.alt || "";
+
+  const panels: MontagePanelAsset[] = [
+    { desktop: slot0Desktop, mobile: slot0Mobile, alt: slot0Alt },
+    { desktop: slot1Desktop, mobile: slot1Mobile, alt: slot1Alt },
+    { desktop: centerDesktop, mobile: centerMobile, alt: copy.hero.alt || "" },
+    { desktop: slot3Desktop, mobile: slot3Mobile, alt: slot3Alt },
+    { desktop: slot4Desktop, mobile: slot4Mobile, alt: slot4Alt },
+  ];
 
   return {
-    centerImage,
-    // [0: outer left, 1: inner left, 2: center (hero), 3: inner right, 4: outer right]
-    panels: [p0, p1, centerImage, p3, p4],
+    centerImageDesktop: centerDesktop,
+    centerImageMobile: centerMobile,
+    panels,
   };
+}
+
+function MontagePanelPicture({
+  asset,
+  alt = "",
+  className = "object-cover",
+}: {
+  asset: MontagePanelAsset;
+  alt?: string;
+  className?: string;
+}) {
+  const isDifferent = Boolean(asset.mobile && asset.mobile !== asset.desktop);
+  return (
+    <picture style={{ width: "100%", height: "100%" }}>
+      {isDifferent && (
+        <source media="(max-width: 767px)" srcSet={asset.mobile} />
+      )}
+      <img
+        src={asset.desktop}
+        alt={alt || asset.alt || ""}
+        className={className}
+        loading="eager"
+        decoding="sync"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          position: "absolute",
+          inset: 0,
+        }}
+      />
+    </picture>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -156,15 +245,19 @@ export function PageTransitionProvider({
 
   const isCinematicPage = isHomepage && copy.opening?.enabled === true;
 
-  const { centerImage, panels } = getMontageAssets(copy, isProjectsPage);
+  const { centerImageDesktop, centerImageMobile, panels } = getMontageAssets(copy, isProjectsPage);
 
   // Preload critical hero image for seamless transition
   useEffect(() => {
-    if (typeof window !== "undefined" && centerImage) {
-      const img = new window.Image();
-      img.src = centerImage;
+    if (typeof window !== "undefined") {
+      const isMobile = window.innerWidth < 768;
+      const target = isMobile ? centerImageMobile : centerImageDesktop;
+      if (target) {
+        const img = new window.Image();
+        img.src = target;
+      }
     }
-  }, [centerImage]);
+  }, [centerImageDesktop, centerImageMobile]);
 
   // Sync viewport measurements for rock-solid clipPath calculations
   useEffect(() => {
@@ -579,7 +672,7 @@ export function PageTransitionProvider({
                   borderRadius: "6px",
                 }}
               >
-                <Image src={panels[0]} alt="" fill sizes="20vw" priority className="object-cover" />
+                <MontagePanelPicture asset={panels[0]} />
                 <div
                   style={{
                     position: "absolute",
@@ -613,7 +706,7 @@ export function PageTransitionProvider({
                 borderRadius: "6px",
               }}
             >
-              <Image src={panels[1]} alt="" fill sizes="20vw" priority className="object-cover" />
+              <MontagePanelPicture asset={panels[1]} />
               <div
                 style={{
                   position: "absolute",
@@ -656,7 +749,7 @@ export function PageTransitionProvider({
                 borderRadius: "6px",
               }}
             >
-              <Image src={panels[3]} alt="" fill sizes="20vw" priority className="object-cover" />
+              <MontagePanelPicture asset={panels[3]} />
               <div
                 style={{
                   position: "absolute",
@@ -690,7 +783,7 @@ export function PageTransitionProvider({
                   borderRadius: "6px",
                 }}
               >
-                <Image src={panels[4]} alt="" fill sizes="20vw" priority className="object-cover" />
+                <MontagePanelPicture asset={panels[4]} />
                 <div
                   style={{
                     position: "absolute",
@@ -767,19 +860,25 @@ export function PageTransitionProvider({
                 ease: HERO_TIMING.background.ease,
               }}
             >
-              <Image
-                src={centerImage}
-                alt=""
-                fill
-                priority
-                sizes="100vw"
-                className="object-cover"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
+              <picture style={{ width: "100%", height: "100%" }}>
+                {centerImageMobile && centerImageMobile !== centerImageDesktop && (
+                  <source media="(max-width: 767px)" srcSet={centerImageMobile} />
+                )}
+                <img
+                  src={centerImageDesktop}
+                  alt={copy.hero.alt || ""}
+                  className="object-cover"
+                  loading="eager"
+                  decoding="sync"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    position: "absolute",
+                    inset: 0,
+                  }}
+                />
+              </picture>
             </motion.div>
             {/* Subtle wash that matches hero wash during expansion */}
             <div

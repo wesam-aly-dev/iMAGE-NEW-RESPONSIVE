@@ -47,6 +47,27 @@ model Homepage {
   openingVideoDesktopUrl String?
   openingVideoMobileUrl  String?
   openingPosterUrl       String?
+  openingMobilePosterUrl String?
+  openingSlot1ImageUrl   String?
+  openingSlot1MobileImageUrl String?
+  openingSlot1AltEn      String?
+  openingSlot1AltAr      String?
+  openingSlot2ImageUrl   String?
+  openingSlot2MobileImageUrl String?
+  openingSlot2AltEn      String?
+  openingSlot2AltAr      String?
+  openingSlot3ImageUrl   String?
+  openingSlot3MobileImageUrl String?
+  openingSlot3AltEn      String?
+  openingSlot3AltAr      String?
+  openingSlot4ImageUrl   String?
+  openingSlot4MobileImageUrl String?
+  openingSlot4AltEn      String?
+  openingSlot4AltAr      String?
+  openingSlot5ImageUrl   String?
+  openingSlot5MobileImageUrl String?
+  openingSlot5AltEn      String?
+  openingSlot5AltAr      String?
   heroEnabled            Boolean             @default(true)
   heroBackgroundRgb      String              @default("255, 255, 255")
   heroEyebrowEn          String
@@ -788,6 +809,16 @@ model GlobalSettings {
   notificationRecipientEmail String?   @default("info@imagedevelopments.com")
   careersRecipientEmail      String?
   notificationSenderEmail    String?
+  notificationSenderName     String?   @default("Image Developments")
+  additionalRecipients       String?
+  smtpActiveSource           String?   @default("ENV") // "CMS" | "ENV"
+  smtpHost                   String?
+  smtpPort                   Int?      @default(465)
+  smtpEncryption             String?   @default("SSL") // "SSL" | "STARTTLS" | "NONE"
+  smtpUser                   String?
+  smtpPasswordEncrypted      String?
+  smtpPasswordIv             String?
+  smtpPasswordTag            String?
   lastNotificationTestAt     DateTime?
   lastNotificationTestResult String?
   updatedAt               DateTime     @updatedAt

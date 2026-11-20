@@ -2,10 +2,10 @@ import net from "net";
 import tls from "tls";
 import { EmailDeliveryResult, EmailSendOptions } from "./types";
 
-interface SmtpConfig {
+export interface SmtpConfig {
   host: string;
   port: number;
-  secure?: boolean; // true for port 465, false for 587/25
+  secure?: boolean; // true for port 465 SSL/TLS, false for 587/25
   user?: string;
   pass?: string;
   from: string;
@@ -314,4 +314,107 @@ export async function sendViaSmtp(options: EmailSendOptions, config: SmtpConfig)
     };
   }
 }
+
+/**
+ * Perform a socket-level test of SMTP connectivity, TLS handshake, and authentication
+ * without sending an email message or submitting DATA.
+ */
+export async function testSmtpConnection(
+  config: SmtpConfig
+): Promise<{ success: boolean; message: string; greeting?: string }> {
+  let activeSocket: SmtpSocket | null = null;
+
+  try {
+    const timeout = config.timeoutMs || 10000;
+
+    if (config.secure) {
+      const tlsSock = tls.connect({
+        host: config.host,
+        port: config.port,
+        servername: config.host,
+        rejectUnauthorized: process.env.NODE_ENV === "production",
+      });
+      activeSocket = new SmtpSocket(tlsSock);
+    } else {
+      const netSock = net.connect({
+        host: config.host,
+        port: config.port,
+      });
+      activeSocket = new SmtpSocket(netSock);
+    }
+
+    const greeting = await activeSocket.readResponse(timeout);
+    if (!greeting.startsWith("220")) {
+      throw new Error(`Unexpected SMTP greeting: ${greeting}`);
+    }
+
+    let ehloRes = await activeSocket.sendCommand(`EHLO ${config.host}`);
+    if (!ehloRes.startsWith("250")) {
+      ehloRes = await activeSocket.sendCommand(`HELO ${config.host}`);
+      if (!ehloRes.startsWith("250")) {
+        throw new Error(`HELO/EHLO rejected: ${ehloRes}`);
+      }
+    }
+
+    // STARTTLS if not already secure and port is 587/25
+    if (!config.secure && (config.port === 587 || config.port === 25)) {
+      const startTlsRes = await activeSocket.sendCommand("STARTTLS");
+      if (startTlsRes.startsWith("220")) {
+        activeSocket = await activeSocket.upgradeTls({
+          host: config.host,
+          servername: config.host,
+          rejectUnauthorized: process.env.NODE_ENV === "production",
+        });
+
+        const postTlsEhlo = await activeSocket.sendCommand(`EHLO ${config.host}`);
+        if (!postTlsEhlo.startsWith("250")) {
+          throw new Error(`EHLO failed after STARTTLS: ${postTlsEhlo}`);
+        }
+      }
+    }
+
+    // AUTH LOGIN if credentials provided
+    if (config.user && config.pass) {
+      const authRes = await activeSocket.sendCommand("AUTH LOGIN");
+      if (!authRes.startsWith("334")) {
+        throw new Error(`AUTH LOGIN rejected: ${authRes}`);
+      }
+
+      const userB64 = Buffer.from(config.user).toString("base64");
+      const userRes = await activeSocket.sendCommand(userB64);
+      if (!userRes.startsWith("334")) {
+        throw new Error(`SMTP username rejected: ${userRes}`);
+      }
+
+      const passB64 = Buffer.from(config.pass).toString("base64");
+      const passRes = await activeSocket.sendCommand(passB64);
+      if (!passRes.startsWith("235")) {
+        throw new Error(`SMTP authentication failed (invalid password or credentials): ${passRes}`);
+      }
+    }
+
+    try {
+      await activeSocket.sendCommand("QUIT");
+    } catch {
+      // ignore
+    }
+    activeSocket.close();
+
+    return {
+      success: true,
+      message: `Successfully connected and authenticated with ${config.host}:${config.port} via ${config.secure ? "SSL/TLS" : "STARTTLS/plain"}.`,
+      greeting,
+    };
+  } catch (err: unknown) {
+    if (activeSocket) {
+      activeSocket.close();
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      message: `SMTP connection failed: ${message}`,
+    };
+  }
+}
+
 

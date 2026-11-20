@@ -14,6 +14,7 @@ import { parsePageBlocksInput } from "@/lib/page-blocks-input";
 import { BLOCK_PAGES } from "@/lib/page-blocks";
 import { processVisualTourUpload, deleteVisualTourAssets } from "@/lib/tours";
 import { validateTypographyValue, TYPOGRAPHY_ROLES, type TypographyRole } from "@/lib/typography";
+import { encryptCredential } from "@/lib/crypto";
 
 const str=(f:FormData,k:string)=>String(f.get(k)??"").trim();
 const bool=(f:FormData,k:string)=>f.get(k)==="on";
@@ -664,6 +665,32 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
         openingVideoDesktopUrl: f.has("openingVideoDesktopUrl") ? (str(f, "openingVideoDesktopUrl") || null) : existing.openingVideoDesktopUrl,
         openingVideoMobileUrl: f.has("openingVideoMobileUrl") ? (str(f, "openingVideoMobileUrl") || null) : existing.openingVideoMobileUrl,
         openingPosterUrl: f.has("openingPosterUrl") ? (str(f, "openingPosterUrl") || null) : existing.openingPosterUrl,
+        openingMobilePosterUrl: f.has("openingMobilePosterUrl") ? (str(f, "openingMobilePosterUrl") || null) : existing.openingMobilePosterUrl,
+
+        openingSlot1ImageUrl: f.has("openingSlot1ImageUrl") ? (str(f, "openingSlot1ImageUrl") || null) : existing.openingSlot1ImageUrl,
+        openingSlot1MobileImageUrl: f.has("openingSlot1MobileImageUrl") ? (str(f, "openingSlot1MobileImageUrl") || null) : existing.openingSlot1MobileImageUrl,
+        openingSlot1AltEn: f.has("openingSlot1AltEn") ? (str(f, "openingSlot1AltEn") || null) : existing.openingSlot1AltEn,
+        openingSlot1AltAr: f.has("openingSlot1AltAr") ? (str(f, "openingSlot1AltAr") || null) : existing.openingSlot1AltAr,
+
+        openingSlot2ImageUrl: f.has("openingSlot2ImageUrl") ? (str(f, "openingSlot2ImageUrl") || null) : existing.openingSlot2ImageUrl,
+        openingSlot2MobileImageUrl: f.has("openingSlot2MobileImageUrl") ? (str(f, "openingSlot2MobileImageUrl") || null) : existing.openingSlot2MobileImageUrl,
+        openingSlot2AltEn: f.has("openingSlot2AltEn") ? (str(f, "openingSlot2AltEn") || null) : existing.openingSlot2AltEn,
+        openingSlot2AltAr: f.has("openingSlot2AltAr") ? (str(f, "openingSlot2AltAr") || null) : existing.openingSlot2AltAr,
+
+        openingSlot3ImageUrl: f.has("openingSlot3ImageUrl") ? (str(f, "openingSlot3ImageUrl") || null) : existing.openingSlot3ImageUrl,
+        openingSlot3MobileImageUrl: f.has("openingSlot3MobileImageUrl") ? (str(f, "openingSlot3MobileImageUrl") || null) : existing.openingSlot3MobileImageUrl,
+        openingSlot3AltEn: f.has("openingSlot3AltEn") ? (str(f, "openingSlot3AltEn") || null) : existing.openingSlot3AltEn,
+        openingSlot3AltAr: f.has("openingSlot3AltAr") ? (str(f, "openingSlot3AltAr") || null) : existing.openingSlot3AltAr,
+
+        openingSlot4ImageUrl: f.has("openingSlot4ImageUrl") ? (str(f, "openingSlot4ImageUrl") || null) : existing.openingSlot4ImageUrl,
+        openingSlot4MobileImageUrl: f.has("openingSlot4MobileImageUrl") ? (str(f, "openingSlot4MobileImageUrl") || null) : existing.openingSlot4MobileImageUrl,
+        openingSlot4AltEn: f.has("openingSlot4AltEn") ? (str(f, "openingSlot4AltEn") || null) : existing.openingSlot4AltEn,
+        openingSlot4AltAr: f.has("openingSlot4AltAr") ? (str(f, "openingSlot4AltAr") || null) : existing.openingSlot4AltAr,
+
+        openingSlot5ImageUrl: f.has("openingSlot5ImageUrl") ? (str(f, "openingSlot5ImageUrl") || null) : existing.openingSlot5ImageUrl,
+        openingSlot5MobileImageUrl: f.has("openingSlot5MobileImageUrl") ? (str(f, "openingSlot5MobileImageUrl") || null) : existing.openingSlot5MobileImageUrl,
+        openingSlot5AltEn: f.has("openingSlot5AltEn") ? (str(f, "openingSlot5AltEn") || null) : existing.openingSlot5AltEn,
+        openingSlot5AltAr: f.has("openingSlot5AltAr") ? (str(f, "openingSlot5AltAr") || null) : existing.openingSlot5AltAr,
 
         heroEnabled: resolveBooleanSetting(f, "heroEnabled", existing.heroEnabled),
         heroEyebrowEn: f.has("heroEyebrowEn") ? (str(f, "heroEyebrowEn") || existing.heroEyebrowEn) : existing.heroEyebrowEn,
@@ -819,11 +846,40 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
         homepageUpdate.statsJournalArticleIds = JSON.stringify(selectedArticlesWithOrder.map(item => item.id));
       }
 
-      // 1. Single Atomic Homepage Update
+      // 1. Single Atomic Homepage Update with defensive field validation against runtime Prisma model
+      const runtimeFields = (tx as any)._runtimeDataModel?.models?.Homepage?.fields;
+      let safeData: Record<string, any> = homepageUpdate;
+      const omittedFields: Record<string, any> = {};
+
+      if (Array.isArray(runtimeFields) && runtimeFields.length > 0) {
+        const allowedFieldNames = new Set(runtimeFields.map((f: any) => f.name));
+        safeData = {};
+        for (const [key, value] of Object.entries(homepageUpdate)) {
+          if (allowedFieldNames.has(key)) {
+            safeData[key] = value;
+          } else {
+            omittedFields[key] = value;
+          }
+        }
+      }
+
       await tx.homepage.update({
         where: { id: "homepage" },
-        data: homepageUpdate,
+        data: safeData,
       });
+
+      // If any fields were omitted because of an in-memory client discrepancy,
+      // update them directly in SQLite so data is preserved without failing the save:
+      const omittedEntries = Object.entries(omittedFields);
+      if (omittedEntries.length > 0) {
+        for (const [col, val] of omittedEntries) {
+          try {
+            await tx.$executeRawUnsafe(`UPDATE Homepage SET "${col}" = ? WHERE id = 'homepage'`, val);
+          } catch (rawErr) {
+            console.warn(`[saveHomepage] Raw update for omitted column "${col}" skipped:`, rawErr);
+          }
+        }
+      }
 
       // 2. Company Statistics Update
       const statIds = f.getAll("statId").map(String);
@@ -899,7 +955,12 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
     }
 
     const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
-      ? ` [Diagnostic: ${error.message.split("\n").filter(l => l.trim() && !l.includes("~~~")).slice(0, 2).join(" - ")}]`
+      ? (() => {
+          const lines = error.message.split("\n").map(l => l.trim()).filter(Boolean);
+          const failureReason = lines.find(l => l.includes("Unknown argument") || l.includes("Argument ") || l.includes("Field ") || l.includes("Unique constraint"))
+            || lines.filter(l => !l.includes("~~~") && !l.startsWith("{") && !l.startsWith("}")).slice(0, 2).join(" - ");
+          return failureReason ? ` [Diagnostic: ${failureReason}]` : "";
+        })()
       : "";
 
     return {
@@ -2134,17 +2195,97 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
     if(!/^https?:\/\//i.test(social.url)||!safeUrl.safeParse(social.url).success)return{error:`Enter a valid public URL for ${social.name}.`};
     if(social.svgIcon.length>20000||!/^<svg(?:\s|>)/i.test(social.svgIcon)||!/<\/svg>$/i.test(social.svgIcon))return{error:`Paste a complete SVG icon for ${social.name}.`};
   }
+
+  // Validate SMTP Port
+  const smtpPortStr = str(f, "smtpPort");
+  let smtpPort = 465;
+  if (smtpPortStr) {
+    const parsed = Number(smtpPortStr);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      return { error: "Enter a valid SMTP port number between 1 and 65535." };
+    }
+    smtpPort = parsed;
+  }
+
   await prisma.$transaction(async tx=>{
+    const existing = await tx.globalSettings.findUniqueOrThrow({ where: { id: "global" } });
+
+    // Handle password encryption:
+    // If user typed a new password, encrypt and store.
+    // If field is empty or omitted, retain existing encrypted password.
+    const rawNewPass = str(f, "smtpPassword");
+    let encryptedPassData: {
+      smtpPasswordEncrypted?: string | null;
+      smtpPasswordIv?: string | null;
+      smtpPasswordTag?: string | null;
+    } = {
+      smtpPasswordEncrypted: existing.smtpPasswordEncrypted,
+      smtpPasswordIv: existing.smtpPasswordIv,
+      smtpPasswordTag: existing.smtpPasswordTag,
+    };
+
+    if (rawNewPass) {
+      const encrypted = encryptCredential(rawNewPass);
+      encryptedPassData = {
+        smtpPasswordEncrypted: encrypted.ciphertext,
+        smtpPasswordIv: encrypted.iv,
+        smtpPasswordTag: encrypted.tag,
+      };
+    } else if (f.has("clearSmtpPassword") && f.get("clearSmtpPassword") === "1") {
+      encryptedPassData = {
+        smtpPasswordEncrypted: null,
+        smtpPasswordIv: null,
+        smtpPasswordTag: null,
+      };
+    }
+
+    const settingsUpdate = {
+      siteNameEn:str(f,"siteNameEn"),siteNameAr:str(f,"siteNameAr"),contactEmail:email,phone:str(f,"phone"),hotline:str(f,"hotline")||"17087",companyBrochureUrl:str(f,"companyBrochureUrl")||null,workingHoursEn:str(f,"workingHoursEn")||"Sunday - Thursday: 9:00 AM - 6:00 PM",workingHoursAr:str(f,"workingHoursAr")||"الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م",addressEn:str(f,"addressEn"),addressAr:str(f,"addressAr"),mapUrl:str(f,"mapUrl")||null,descriptionEn:str(f,"descriptionEn")||null,descriptionAr:str(f,"descriptionAr")||null,footerExploreHeadingEn:str(f,"footerExploreHeadingEn")||"Explore",footerExploreHeadingAr:str(f,"footerExploreHeadingAr")||"استكشف",footerProjectsHeadingEn:str(f,"footerProjectsHeadingEn")||"Our Projects",footerProjectsHeadingAr:str(f,"footerProjectsHeadingAr")||"مشاريعنا",footerContactHeadingEn:str(f,"footerContactHeadingEn")||"Contact",footerContactHeadingAr:str(f,"footerContactHeadingAr")||"تواصل معنا",callbackEnabled:bool(f,"callbackEnabled"),callbackLabelEn:str(f,"callbackLabelEn")||"Request a Call Back",callbackLabelAr:str(f,"callbackLabelAr")||"طلب معاودة الاتصال",copyrightEn:str(f,"copyrightEn"),copyrightAr:str(f,"copyrightAr"),defaultSeoTitleEn:str(f,"defaultSeoTitleEn"),defaultSeoTitleAr:str(f,"defaultSeoTitleAr"),defaultSeoDescriptionEn:str(f,"defaultSeoDescriptionEn"),defaultSeoDescriptionAr:str(f,"defaultSeoDescriptionAr"),defaultOgImageUrl:str(f,"defaultOgImageUrl")||null,menuMediaUrl:str(f,"menuMediaUrl"),menuMediaAltEn:str(f,"menuMediaAltEn"),menuMediaAltAr:str(f,"menuMediaAltAr"),
+      notificationEmailEnabled: bool(f, "notificationEmailEnabled"),
+      notificationRecipientEmail: str(f, "notificationRecipientEmail") || null,
+      careersRecipientEmail: str(f, "careersRecipientEmail") || null,
+      notificationSenderEmail: str(f, "notificationSenderEmail") || null,
+      notificationSenderName: str(f, "notificationSenderName") || "Image Developments",
+      additionalRecipients: str(f, "additionalRecipients") || null,
+      smtpActiveSource: str(f, "smtpActiveSource") || "ENV",
+      smtpHost: str(f, "smtpHost") || null,
+      smtpPort: smtpPort,
+      smtpEncryption: str(f, "smtpEncryption") || "SSL",
+      smtpUser: str(f, "smtpUser") || null,
+      ...encryptedPassData,
+    };
+
+    const globalFields = (tx as any)._runtimeDataModel?.models?.GlobalSettings?.fields;
+    let safeSettingsData: Record<string, any> = settingsUpdate;
+    const omittedSettingsFields: Record<string, any> = {};
+
+    if (Array.isArray(globalFields) && globalFields.length > 0) {
+      const allowedNames = new Set(globalFields.map((field: any) => field.name));
+      safeSettingsData = {};
+      for (const [key, value] of Object.entries(settingsUpdate)) {
+        if (allowedNames.has(key)) {
+          safeSettingsData[key] = value;
+        } else {
+          omittedSettingsFields[key] = value;
+        }
+      }
+    }
+
     await tx.globalSettings.update({
       where:{id:"global"},
-      data:{
-        siteNameEn:str(f,"siteNameEn"),siteNameAr:str(f,"siteNameAr"),contactEmail:email,phone:str(f,"phone"),hotline:str(f,"hotline")||"17087",companyBrochureUrl:str(f,"companyBrochureUrl")||null,workingHoursEn:str(f,"workingHoursEn")||"Sunday - Thursday: 9:00 AM - 6:00 PM",workingHoursAr:str(f,"workingHoursAr")||"الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م",addressEn:str(f,"addressEn"),addressAr:str(f,"addressAr"),mapUrl:str(f,"mapUrl")||null,descriptionEn:str(f,"descriptionEn")||null,descriptionAr:str(f,"descriptionAr")||null,footerExploreHeadingEn:str(f,"footerExploreHeadingEn")||"Explore",footerExploreHeadingAr:str(f,"footerExploreHeadingAr")||"استكشف",footerProjectsHeadingEn:str(f,"footerProjectsHeadingEn")||"Our Projects",footerProjectsHeadingAr:str(f,"footerProjectsHeadingAr")||"مشاريعنا",footerContactHeadingEn:str(f,"footerContactHeadingEn")||"Contact",footerContactHeadingAr:str(f,"footerContactHeadingAr")||"تواصل معنا",callbackEnabled:bool(f,"callbackEnabled"),callbackLabelEn:str(f,"callbackLabelEn")||"Request a Call Back",callbackLabelAr:str(f,"callbackLabelAr")||"طلب معاودة الاتصال",copyrightEn:str(f,"copyrightEn"),copyrightAr:str(f,"copyrightAr"),defaultSeoTitleEn:str(f,"defaultSeoTitleEn"),defaultSeoTitleAr:str(f,"defaultSeoTitleAr"),defaultSeoDescriptionEn:str(f,"defaultSeoDescriptionEn"),defaultSeoDescriptionAr:str(f,"defaultSeoDescriptionAr"),defaultOgImageUrl:str(f,"defaultOgImageUrl")||null,menuMediaUrl:str(f,"menuMediaUrl"),menuMediaAltEn:str(f,"menuMediaAltEn"),menuMediaAltAr:str(f,"menuMediaAltAr"),
-        notificationEmailEnabled: bool(f, "notificationEmailEnabled"),
-        notificationRecipientEmail: str(f, "notificationRecipientEmail") || null,
-        careersRecipientEmail: str(f, "careersRecipientEmail") || null,
-        notificationSenderEmail: str(f, "notificationSenderEmail") || null
-      }
+      data: safeSettingsData as any,
     });
+
+    const omittedSettingsEntries = Object.entries(omittedSettingsFields);
+    if (omittedSettingsEntries.length > 0) {
+      for (const [col, val] of omittedSettingsEntries) {
+        try {
+          await tx.$executeRawUnsafe(`UPDATE GlobalSettings SET "${col}" = ? WHERE id = 'global'`, val);
+        } catch (rawErr) {
+          console.warn(`[saveSettings] Raw update for omitted column "${col}" skipped:`, rawErr);
+        }
+      }
+    }
     await tx.socialLink.deleteMany({where:{globalSettingsId:"global"}});
     if(socials.length)await tx.socialLink.createMany({data:socials.map(item=>({...item,globalSettingsId:"global"}))});
   });
@@ -2173,6 +2314,81 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
   revalidatePath("/ar/terms");
   revalidatePath("/", "layout");
   return { success: "Global settings saved." };
+}
+
+export async function testSmtpConnectionAction(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const host = str(f, "smtpHost");
+  if (!host) {
+    return { error: "Enter an SMTP server host to test (e.g. image-developments.com)." };
+  }
+  const portStr = str(f, "smtpPort") || "465";
+  const port = parseInt(portStr, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    return { error: "Enter a valid port number between 1 and 65535." };
+  }
+  const encryption = str(f, "smtpEncryption") || "SSL";
+  const user = str(f, "smtpUser") || undefined;
+  let pass: string | undefined = str(f, "smtpPassword") || undefined;
+
+  // If password input is empty, retrieve existing decrypted password from DB
+  if (!pass) {
+    const s = await prisma.globalSettings.findUnique({
+      where: { id: "global" },
+      select: {
+        smtpPasswordEncrypted: true,
+        smtpPasswordIv: true,
+        smtpPasswordTag: true,
+      },
+    });
+    const { decryptCredential } = await import("@/lib/crypto");
+    pass = decryptCredential({
+      ciphertext: s?.smtpPasswordEncrypted,
+      iv: s?.smtpPasswordIv,
+      tag: s?.smtpPasswordTag,
+    }) || undefined;
+  }
+
+  const { testSmtpConnection } = await import("@/lib/notifications/smtp-client");
+  const result = await testSmtpConnection({
+    host,
+    port,
+    secure: encryption === "SSL" || port === 465,
+    user,
+    pass,
+    from: user || "info@image-developments.com",
+    timeoutMs: 12000,
+  });
+
+  const timestamp = new Date();
+  await prisma.globalSettings.update({
+    where: { id: "global" },
+    data: {
+      lastNotificationTestAt: timestamp,
+      lastNotificationTestResult: result.success ? `Success: ${result.message}` : `Failed: ${result.message}`,
+    },
+  });
+
+  revalidatePath("/admin/settings");
+
+  if (result.success) {
+    return { success: result.message };
+  } else {
+    return { error: result.message };
+  }
+}
+
+export async function clearNotificationStatusAction(): Promise<ActionState> {
+  await requireAdmin();
+  await prisma.globalSettings.update({
+    where: { id: "global" },
+    data: {
+      lastNotificationTestAt: null,
+      lastNotificationTestResult: null,
+    },
+  });
+  revalidatePath("/admin/settings");
+  return { success: "Notification test status cleared." };
 }
 
 export async function testNotificationEmailAction(_: ActionState, f: FormData): Promise<ActionState> {
@@ -2204,7 +2420,34 @@ export async function deleteMedia(_:ActionState,f:FormData):Promise<ActionState>
   const asset=await prisma.mediaAsset.findUnique({where:{id}});
   if(!asset)return{error:"Media item not found."};
   const [home,settings,project,news]=await Promise.all([
-    prisma.homepage.findFirst({where:{OR:[{openingVideoDesktopUrl:asset.url},{openingVideoMobileUrl:asset.url},{openingPosterUrl:asset.url},{heroMediaUrl:asset.url},{heroMobileMediaUrl:asset.url},{heroVideoDesktopUrl:asset.url},{heroVideoMobileUrl:asset.url},{heroPosterUrl:asset.url},{lifestyleMediaUrl:asset.url},{aboutHeroImageUrl:asset.url}]},select:{id:true}}),
+    prisma.homepage.findFirst({
+      where: {
+        OR: [
+          { openingVideoDesktopUrl: asset.url },
+          { openingVideoMobileUrl: asset.url },
+          { openingPosterUrl: asset.url },
+          { openingMobilePosterUrl: asset.url },
+          { openingSlot1ImageUrl: asset.url },
+          { openingSlot1MobileImageUrl: asset.url },
+          { openingSlot2ImageUrl: asset.url },
+          { openingSlot2MobileImageUrl: asset.url },
+          { openingSlot3ImageUrl: asset.url },
+          { openingSlot3MobileImageUrl: asset.url },
+          { openingSlot4ImageUrl: asset.url },
+          { openingSlot4MobileImageUrl: asset.url },
+          { openingSlot5ImageUrl: asset.url },
+          { openingSlot5MobileImageUrl: asset.url },
+          { heroMediaUrl: asset.url },
+          { heroMobileMediaUrl: asset.url },
+          { heroVideoDesktopUrl: asset.url },
+          { heroVideoMobileUrl: asset.url },
+          { heroPosterUrl: asset.url },
+          { lifestyleMediaUrl: asset.url },
+          { aboutHeroImageUrl: asset.url },
+        ],
+      },
+      select: { id: true },
+    }),
     prisma.globalSettings.findFirst({where:{OR:[{menuMediaUrl:asset.url},{defaultOgImageUrl:asset.url}]},select:{id:true}}),
     prisma.project.findFirst({where:{OR:[{coverImageUrl:asset.url},{logoUrl:asset.url},{ogImageUrl:asset.url}]},select:{id:true}}),
     prisma.newsArticle.findFirst({where:{OR:[{coverImageUrl:asset.url},{ogImageUrl:asset.url}]},select:{id:true}}),

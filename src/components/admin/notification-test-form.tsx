@@ -1,6 +1,10 @@
 "use client";
 import React, { useActionState } from "react";
-import { testNotificationEmailAction } from "@/app/admin/actions";
+import {
+  testNotificationEmailAction,
+  testSmtpConnectionAction,
+  clearNotificationStatusAction,
+} from "@/app/admin/actions";
 
 interface NotificationTestFormProps {
   defaultEmail: string;
@@ -9,6 +13,11 @@ interface NotificationTestFormProps {
   lastTestResult?: string | null;
   smtpConfigured: boolean;
   hasResend?: boolean;
+  smtpHost?: string | null;
+  smtpPort?: number;
+  smtpEncryption?: string;
+  smtpUser?: string | null;
+  hasSmtpPassword?: boolean;
 }
 
 export function NotificationTestForm({
@@ -18,8 +27,15 @@ export function NotificationTestForm({
   lastTestResult,
   smtpConfigured,
   hasResend,
+  smtpHost,
+  smtpPort = 465,
+  smtpEncryption = "SSL",
+  smtpUser,
+  hasSmtpPassword,
 }: NotificationTestFormProps) {
-  const [state, formAction, pending] = useActionState(testNotificationEmailAction, {});
+  const [emailState, emailFormAction, emailPending] = useActionState(testNotificationEmailAction, {});
+  const [socketState, socketFormAction, socketPending] = useActionState(testSmtpConnectionAction, {});
+  const [clearState, clearFormAction, clearPending] = useActionState(clearNotificationStatusAction, {});
 
   const isConfigured = smtpConfigured || Boolean(hasResend);
 
@@ -27,15 +43,15 @@ export function NotificationTestForm({
     <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
       <div style={{ marginBottom: "16px" }}>
         <h4 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: 600 }}>
-          Verify Email Delivery / اختبار إرسال البريد
+          Verify Email Delivery &amp; Connection Diagnostics / اختبار اتصال البريد
         </h4>
         <p style={{ margin: 0, fontSize: "13px", color: "var(--muted, #6b7280)" }}>
-          Send an immediate test message through your configured mail delivery adapter to verify connectivity.
+          Test raw socket connectivity to your mail server or send an immediate test message to verify delivery.
         </p>
       </div>
 
       {/* Provider Status Pill */}
-      <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
+      <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px" }}>
         <div
           style={{
             display: "inline-flex",
@@ -55,141 +71,144 @@ export function NotificationTestForm({
             {hasResend
               ? "Provider: Resend API"
               : smtpConfigured
-              ? "Provider: Direct SMTP"
+              ? `Provider: SMTP (${smtpHost || "custom"}:${smtpPort} ${smtpEncryption})`
               : "No Provider Configured (SMTP / Resend missing)"}
           </span>
         </div>
 
         {savedRecipient && (
-          <div
-            style={{
-              fontSize: "12px",
-              color: "var(--muted, #6b7280)",
-            }}
-          >
-            Saved CMS Inquiries Recipient: <strong>{savedRecipient}</strong>
+          <div style={{ fontSize: "12px", color: "var(--muted, #6b7280)" }}>
+            Primary Recipient: <strong>{savedRecipient}</strong>
           </div>
         )}
       </div>
 
-      {!isConfigured && (
-        <div
-          style={{
-            padding: "10px 14px",
-            backgroundColor: "#fffbeb",
-            border: "1px solid #fef3c7",
-            borderRadius: "6px",
-            fontSize: "13px",
-            color: "#92400e",
-            marginBottom: "14px",
-          }}
-        >
-          <strong>Notice:</strong> No SMTP or Resend credentials found in environment variables (
-          <code>SMTP_HOST</code> or <code>RESEND_API_KEY</code>). Test dispatch will test the pipeline and report <code>BLOCKED</code> until credentials are supplied in your server environment.
-        </div>
-      )}
+      {/* Test Actions Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "20px" }}>
+        {/* 1. Raw SMTP Socket Test (No email sent) */}
+        <div style={{ padding: "16px", background: "rgba(0,0,0,0.02)", border: "1px solid var(--border, #e5e7eb)", borderRadius: "8px" }}>
+          <h5 style={{ margin: "0 0 6px 0", fontSize: "13px", fontWeight: 600 }}>1. Test SMTP Connection</h5>
+          <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "var(--muted, #6b7280)" }}>
+            Verifies TCP handshake, TLS encryption, and AUTH credentials without sending an email.
+          </p>
+          <form action={socketFormAction}>
+            <input type="hidden" name="smtpHost" value={smtpHost || ""} />
+            <input type="hidden" name="smtpPort" value={String(smtpPort)} />
+            <input type="hidden" name="smtpEncryption" value={smtpEncryption} />
+            <input type="hidden" name="smtpUser" value={smtpUser || ""} />
+            <button
+              type="submit"
+              disabled={socketPending || (!smtpHost && !process.env.SMTP_HOST)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#ffffff",
+                border: "1px solid var(--border, #d1d5db)",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: socketPending ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {socketPending ? "Testing Socket..." : "Test Connection"}
+            </button>
+          </form>
 
-      <form action={formAction} style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 280px" }}>
-          <label
-            htmlFor="testRecipientEmail"
-            style={{ display: "block", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}
-          >
-            Test Destination Email / بريد استلام الرسالة التجريبية
-          </label>
-          <input
-            id="testRecipientEmail"
-            name="recipientEmail"
-            type="email"
-            required
-            defaultValue={defaultEmail}
-            placeholder="admin@imagedevelopments.com"
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "1px solid var(--border, #d1d5db)",
-              fontSize: "14px",
-            }}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={pending}
-          style={{
-            padding: "8px 18px",
-            backgroundColor: "#2a4534",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "6px",
-            fontSize: "13px",
-            fontWeight: 600,
-            cursor: pending ? "not-allowed" : "pointer",
-            opacity: pending ? 0.7 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          {pending ? (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin">
-                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                <path d="M12 2a10 10 0 0 1 10 10" />
-              </svg>
-              <span>Sending...</span>
-            </>
-          ) : (
-            <>
-              <span>Send Test Email</span>
-              <span aria-hidden="true" style={{ fontSize: "14px" }}>→</span>
-            </>
-          )}
-        </button>
-      </form>
-
-      {state.success && (
-        <div
-          role="status"
-          style={{
-            marginTop: "14px",
-            padding: "10px 14px",
-            backgroundColor: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            borderRadius: "6px",
-            fontSize: "13px",
-            color: "#166534",
-          }}
-        >
-          &check; {state.success}
-        </div>
-      )}
-
-      {state.error && (
-        <div
-          role="alert"
-          style={{
-            marginTop: "14px",
-            padding: "10px 14px",
-            backgroundColor: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            fontSize: "13px",
-            color: "#991b1b",
-          }}
-        >
-          &times; {state.error}
-        </div>
-      )}
-
-      {lastTestAt && (
-        <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--muted, #6b7280)" }}>
-          Last test run: <strong>{new Date(lastTestAt).toLocaleString("en-GB")}</strong>
-          {lastTestResult && (
-            <div style={{ marginTop: "2px", fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>
-              {lastTestResult}
+          {socketState.success && (
+            <div style={{ marginTop: "10px", padding: "8px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "4px", fontSize: "12px", color: "#166534" }}>
+              &check; {socketState.success}
             </div>
           )}
+          {socketState.error && (
+            <div style={{ marginTop: "10px", padding: "8px 10px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "4px", fontSize: "12px", color: "#991b1b" }}>
+              &times; {socketState.error}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Dispatch Live Test Email */}
+        <div style={{ padding: "16px", background: "rgba(0,0,0,0.02)", border: "1px solid var(--border, #e5e7eb)", borderRadius: "8px" }}>
+          <h5 style={{ margin: "0 0 6px 0", fontSize: "13px", fontWeight: 600 }}>2. Send Test Notification Email</h5>
+          <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "var(--muted, #6b7280)" }}>
+            Sends an immediate test message through your active email provider to confirm inbox delivery.
+          </p>
+          <form action={emailFormAction} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <input
+              id="testRecipientEmail"
+              name="recipientEmail"
+              type="email"
+              required
+              defaultValue={defaultEmail}
+              placeholder="admin@imagedevelopments.com"
+              style={{
+                flex: "1 1 auto",
+                padding: "7px 10px",
+                borderRadius: "6px",
+                border: "1px solid var(--border, #d1d5db)",
+                fontSize: "13px",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={emailPending}
+              style={{
+                padding: "8px 14px",
+                backgroundColor: "#2a4534",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: emailPending ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {emailPending ? "Sending..." : "Send Test"}
+            </button>
+          </form>
+
+          {emailState.success && (
+            <div style={{ marginTop: "10px", padding: "8px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "4px", fontSize: "12px", color: "#166534" }}>
+              &check; {emailState.success}
+            </div>
+          )}
+          {emailState.error && (
+            <div style={{ marginTop: "10px", padding: "8px 10px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "4px", fontSize: "12px", color: "#991b1b" }}>
+              &times; {emailState.error}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {lastTestAt && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", fontSize: "12px", color: "var(--muted, #6b7280)", padding: "10px 12px", background: "rgba(0,0,0,0.01)", border: "1px solid var(--border, #e5e7eb)", borderRadius: "6px" }}>
+          <div>
+            Last test: <strong>{new Date(lastTestAt).toLocaleString("en-GB")}</strong>
+            {lastTestResult && (
+              <div style={{ marginTop: "2px", fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all" }}>
+                {lastTestResult}
+              </div>
+            )}
+          </div>
+          <form action={clearFormAction}>
+            <button
+              type="submit"
+              disabled={clearPending}
+              style={{
+                fontSize: "11px",
+                padding: "4px 8px",
+                background: "transparent",
+                border: "1px solid var(--border, #d1d5db)",
+                borderRadius: "4px",
+                cursor: "pointer",
+                color: "var(--muted, #6b7280)",
+              }}
+            >
+              Clear Status
+            </button>
+          </form>
         </div>
       )}
     </div>
