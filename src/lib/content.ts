@@ -54,7 +54,7 @@ export const PUBLIC_PAGES = [
 ] as const;
 export type PublicPageKey = (typeof PUBLIC_PAGES)[number];
 
-const pick = (locale: Locale, en: string, ar: string) => locale === "ar" ? ar : en;
+const pick = (locale: Locale, en: string | null | undefined, ar: string | null | undefined): string => locale === "ar" ? (ar ?? "") : (en ?? "");
 
 export const getPageSections = cache(async (locale: Locale, page: PublicPageKey) => {
   if (!process.env.DATABASE_URL) return [];
@@ -896,22 +896,40 @@ export const getCareersPageContent = cache(async (locale: Locale): Promise<Caree
     "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=85",
   ];
 
+  const eyebrow = pick(locale, home?.careersHeroEyebrowEn ?? "Careers at Image", home?.careersHeroEyebrowAr ?? "انضم إلى فريقنا");
+  const title = pick(locale, home?.careersHeroTitleEn ?? "Shape places that shape tomorrow.", home?.careersHeroTitleAr ?? "اصنع مستقبلاً يحمل بصمتك.");
+  const intro = pick(
+    locale,
+    home?.careersHeroIntroEn ??
+    "At Image Developments, we bring together passionate professionals across architecture, engineering, and development to create places with lasting value.",
+    home?.careersHeroIntroAr ??
+    "في إيمدج للتطوير العقاري، نبحث دائماً عن العقول المبدعة والمهارات المتفردة لنبني معاً مجتمعات استثنائية."
+  );
+
   return {
     ...base,
     careersPage: {
       hero: {
-        eyebrow: pick(locale, home?.careersHeroEyebrowEn ?? "Careers at Image", home?.careersHeroEyebrowAr ?? "انضم إلى فريقنا"),
-        title: pick(locale, home?.careersHeroTitleEn ?? "Shape places that shape tomorrow.", home?.careersHeroTitleAr ?? "اصنع مستقبلاً يحمل بصمتك."),
-        intro: pick(
-          locale,
-          home?.careersHeroIntroEn ??
-          "At Image Developments, we bring together passionate professionals across architecture, engineering, and development to create places with lasting value.",
-          home?.careersHeroIntroAr ??
-          "في إيمدج للتطوير العقاري، نبحث دائماً عن العقول المبدعة والمهارات المتفردة لنبني معاً مجتمعات استثنائية."
-        ),
-        image:
-          home?.careersHeroImageUrl ||
-          "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=2000&q=88",
+        enabled: home?.careersHeroEnabled ?? true,
+        eyebrow,
+        title,
+        body: intro,
+        intro,
+        ctaLabel: pick(locale, home?.careersHeroCtaLabelEn ?? (isAr ? "استكشف الفرص المتاحة" : "Explore Opportunities"), home?.careersHeroCtaLabelAr ?? "استكشف الفرص المتاحة") || (isAr ? "استكشف الفرص المتاحة" : "Explore Opportunities"),
+        ctaUrl: home?.careersHeroCtaUrl || "#open-positions",
+        image: home?.careersHeroImageUrl || "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=2400&q=88",
+        mobileImage: home?.careersHeroMobileImageUrl || undefined,
+        mediaType: (home?.careersHeroMediaType as any) || "IMAGE",
+        videoUrl: home?.careersHeroVideoUrl || undefined,
+        mobileMediaType: (home?.careersHeroMobileMediaType as any) || "INHERIT",
+        mobileVideoUrl: home?.careersHeroMobileVideoUrl || undefined,
+        posterUrl: home?.careersHeroPosterUrl || undefined,
+        focalPoint: home?.careersHeroFocalPoint || "center",
+        mobileFocalPoint: home?.careersHeroMobileFocalPoint || home?.careersHeroFocalPoint || "center",
+        alt: pick(locale, home?.careersHeroImageAltEn, home?.careersHeroImageAltAr) || title,
+        overlay: home?.careersHeroOverlay || "medium",
+        alignment: home?.careersHeroAlignment || "start",
+        height: home?.careersHeroHeight || "fullscreen",
       },
       lifeAtImage: {
         eyebrow: pick(locale, home?.careersLifeEyebrowEn ?? "Life at Image", home?.careersLifeEyebrowAr ?? "الحياة في إيمدج"),
@@ -1420,8 +1438,12 @@ export const getAboutPageContent = cache(async (locale: Locale): Promise<AboutPa
         title: locale === "ar" ? "نصنع أماكن تتمحور حول الحياة التي تحتضنها." : "We shape places around the lives they hold.",
         body: locale === "ar" ? "نؤمن بأن التطوير الجيد يبدأ بالناس ويتطور مع المكان." : "We believe thoughtful development begins with people and grows from a deep understanding of place.",
         image: base.hero.image,
+        mobileImage: undefined,
+        focalPoint: "center",
+        mobileFocalPoint: "center",
         alt: base.hero.alt ?? "Image Developments community",
         ctaLabel: locale === "ar" ? "اكتشف رحلتنا" : "Explore Our Journey",
+        ctaUrl: "#about",
       },
       whoWeAre: {
         enabled: true,
@@ -1487,8 +1509,17 @@ export const getAboutPageContent = cache(async (locale: Locale): Promise<AboutPa
         title: pick(locale, home.aboutHeroTitleEn, home.aboutHeroTitleAr),
         body: pick(locale, home.aboutHeroBodyEn, home.aboutHeroBodyAr),
         image: home.aboutHeroImageUrl ?? base.hero.image,
+        mobileImage: home.aboutHeroMobileImageUrl || undefined,
+        mediaType: (home.aboutHeroMediaType as any) || "IMAGE",
+        videoUrl: home.aboutHeroVideoUrl || undefined,
+        mobileMediaType: (home.aboutHeroMobileMediaType as any) || "INHERIT",
+        mobileVideoUrl: home.aboutHeroMobileVideoUrl || undefined,
+        posterUrl: home.aboutHeroPosterUrl || undefined,
+        focalPoint: home.aboutHeroFocalPoint || "center",
+        mobileFocalPoint: home.aboutHeroMobileFocalPoint || home.aboutHeroFocalPoint || "center",
         alt: pick(locale, home.aboutHeroImageAltEn, home.aboutHeroImageAltAr),
         ctaLabel: pick(locale, home.aboutHeroCtaLabelEn ?? "Explore Our Journey", home.aboutHeroCtaLabelAr ?? "اكتشف رحلتنا"),
+        ctaUrl: home.aboutHeroCtaUrl || "#about",
       },
       whoWeAre: {
         enabled: home.aboutWhoWeAreEnabled,
@@ -1554,18 +1585,166 @@ export const getAboutPageContent = cache(async (locale: Locale): Promise<AboutPa
 
 export const getTeamPageContent = cache(async (locale: Locale): Promise<TeamPageContent> => {
   const base = await getHomepageContent(locale);
-  if (!process.env.DATABASE_URL) return { ...base, teamPage: { eyebrow: locale === "ar" ? "الفريق وراء إيمدج" : "The people behind Image", title: locale === "ar" ? "منظورات مختلفة. رؤية واحدة." : "Different perspectives. One shared vision.", intro: locale === "ar" ? "تعرف على الأشخاص الذين يصنعون أماكن مدروسة." : "Meet the people shaping thoughtful places for how Egypt lives next.", members: [] } };
-  const home = await prisma.homepage.findUnique({ where: { id: "homepage" }, include: { teamMembers: { where: { visible: true }, orderBy: { sortOrder: "asc" } } } });
+  if (!process.env.DATABASE_URL) {
+    const eyebrow = locale === "ar" ? "الفريق وراء إيمدج" : "The people behind Image";
+    const title = locale === "ar" ? "منظورات مختلفة. رؤية واحدة." : "Different perspectives. One shared vision.";
+    const intro = locale === "ar" ? "تعرف على الأشخاص الذين يصنعون أماكن مدروسة لمستقبل الحياة في مصر." : "Meet the people shaping thoughtful places for how Egypt lives next.";
+    return {
+      ...base,
+      teamPage: {
+        eyebrow,
+        title,
+        intro,
+        hero: {
+          enabled: true,
+          eyebrow,
+          title,
+          body: intro,
+          ctaLabel: locale === "ar" ? "تعرف على الفريق" : "Meet The Team",
+          ctaUrl: "#team-roster",
+          image: undefined,
+          mobileImage: undefined,
+          focalPoint: "center",
+          mobileFocalPoint: "center",
+          alt: title,
+          overlay: "medium",
+          alignment: "start",
+          height: "standard",
+        },
+        members: [],
+      },
+    };
+  }
+
+  const home = await prisma.homepage.findUnique({
+    where: { id: "homepage" },
+    include: { teamMembers: { where: { visible: true }, orderBy: { sortOrder: "asc" } } },
+  });
   if (!home) throw new Error("CMS is not seeded. Run `pnpm db:seed`.");
-  return { ...base, teamPage: { eyebrow: pick(locale, home.teamEyebrowEn, home.teamEyebrowAr), title: pick(locale, home.teamTitleEn, home.teamTitleAr), intro: pick(locale, home.teamIntroEn, home.teamIntroAr), members: home.teamMembers.map(member => ({ id: member.id, name: pick(locale, member.nameEn, member.nameAr), role: pick(locale, member.roleEn, member.roleAr), bio: pick(locale, member.bioEn, member.bioAr), image: member.imageUrl, alt: pick(locale, member.imageAltEn, member.imageAltAr) })) } };
+
+  const eyebrow = pick(locale, home.teamEyebrowEn, home.teamEyebrowAr);
+  const title = pick(locale, home.teamTitleEn, home.teamTitleAr);
+  const intro = pick(locale, home.teamIntroEn, home.teamIntroAr);
+
+  return {
+    ...base,
+    teamPage: {
+      eyebrow,
+      title,
+      intro,
+      hero: {
+        enabled: home.teamHeroEnabled,
+        eyebrow,
+        title,
+        body: intro,
+        ctaLabel: pick(locale, home.teamHeroCtaLabelEn, home.teamHeroCtaLabelAr) || undefined,
+        ctaUrl: home.teamHeroCtaUrl || "#team-roster",
+        image: home.teamHeroImageUrl || undefined,
+        mobileImage: home.teamHeroMobileImageUrl || undefined,
+        mediaType: (home.teamHeroMediaType as any) || "IMAGE",
+        videoUrl: home.teamHeroVideoUrl || undefined,
+        mobileMediaType: (home.teamHeroMobileMediaType as any) || "INHERIT",
+        mobileVideoUrl: home.teamHeroMobileVideoUrl || undefined,
+        posterUrl: home.teamHeroPosterUrl || undefined,
+        focalPoint: home.teamHeroFocalPoint || "center",
+        mobileFocalPoint: home.teamHeroMobileFocalPoint || home.teamHeroFocalPoint || "center",
+        alt: pick(locale, home.teamHeroImageAltEn, home.teamHeroImageAltAr) || title,
+        overlay: home.teamHeroOverlay || "medium",
+        alignment: home.teamHeroAlignment || "start",
+        height: home.teamHeroHeight || "standard",
+      },
+      members: home.teamMembers.map((member) => ({
+        id: member.id,
+        name: pick(locale, member.nameEn, member.nameAr),
+        role: pick(locale, member.roleEn, member.roleAr),
+        bio: pick(locale, member.bioEn, member.bioAr),
+        image: member.imageUrl,
+        alt: pick(locale, member.imageAltEn, member.imageAltAr),
+      })),
+    },
+  };
 });
 
 export const getPartnersPageContent = cache(async (locale: Locale): Promise<PartnersPageContent> => {
   const base = await getHomepageContent(locale);
-  if (!process.env.DATABASE_URL) return { ...base, partnersPage: { eyebrow: locale === "ar" ? "شركاؤنا" : "Our partners", title: locale === "ar" ? "نبني معاً. لنصنع أثراً يدوم." : "Built together. Made to last.", intro: locale === "ar" ? "شراكات مدروسة تصنع أماكن ذات قيمة دائمة." : "Thoughtful collaborations that create places with lasting value.", partners: [] } };
-  const home = await prisma.homepage.findUnique({ where: { id: "homepage" }, include: { partners: { where: { visible: true }, orderBy: { sortOrder: "asc" } } } });
+  if (!process.env.DATABASE_URL) {
+    const eyebrow = locale === "ar" ? "شركاؤنا" : "Our partners";
+    const title = locale === "ar" ? "نبني معاً. لنصنع أثراً يدوم." : "Built together. Made to last.";
+    const intro = locale === "ar" ? "شراكات مدروسة تصنع أماكن ذات قيمة دائمة." : "Thoughtful collaborations that create places with lasting value.";
+    return {
+      ...base,
+      partnersPage: {
+        eyebrow,
+        title,
+        intro,
+        hero: {
+          enabled: true,
+          eyebrow,
+          title,
+          body: intro,
+          ctaLabel: locale === "ar" ? "استعرض الشركاء" : "View Partners",
+          ctaUrl: "#partners-directory",
+          image: undefined,
+          mobileImage: undefined,
+          focalPoint: "center",
+          mobileFocalPoint: "center",
+          alt: title,
+          overlay: "medium",
+          alignment: "start",
+          height: "standard",
+        },
+        partners: [],
+      },
+    };
+  }
+
+  const home = await prisma.homepage.findUnique({
+    where: { id: "homepage" },
+    include: { partners: { where: { visible: true }, orderBy: { sortOrder: "asc" } } },
+  });
   if (!home) throw new Error("CMS is not seeded. Run `pnpm db:seed`.");
-  return { ...base, partnersPage: { eyebrow: pick(locale, home.partnersEyebrowEn, home.partnersEyebrowAr), title: pick(locale, home.partnersTitleEn, home.partnersTitleAr), intro: pick(locale, home.partnersIntroEn, home.partnersIntroAr), partners: home.partners.map(partner => ({ id: partner.id, name: pick(locale, partner.nameEn, partner.nameAr), description: pick(locale, partner.descriptionEn ?? "", partner.descriptionAr ?? "") || undefined, logo: partner.logoUrl, alt: pick(locale, partner.logoAltEn, partner.logoAltAr), website: partner.websiteUrl ?? undefined })) } };
+
+  const eyebrow = pick(locale, home.partnersEyebrowEn, home.partnersEyebrowAr);
+  const title = pick(locale, home.partnersTitleEn, home.partnersTitleAr);
+  const intro = pick(locale, home.partnersIntroEn, home.partnersIntroAr);
+
+  return {
+    ...base,
+    partnersPage: {
+      eyebrow,
+      title,
+      intro,
+      hero: {
+        enabled: home.partnersHeroEnabled,
+        eyebrow,
+        title,
+        body: intro,
+        ctaLabel: pick(locale, home.partnersHeroCtaLabelEn, home.partnersHeroCtaLabelAr) || undefined,
+        ctaUrl: home.partnersHeroCtaUrl || "#partners-directory",
+        image: home.partnersHeroImageUrl || undefined,
+        mobileImage: home.partnersHeroMobileImageUrl || undefined,
+        mediaType: (home.partnersHeroMediaType as any) || "IMAGE",
+        videoUrl: home.partnersHeroVideoUrl || undefined,
+        mobileMediaType: (home.partnersHeroMobileMediaType as any) || "INHERIT",
+        mobileVideoUrl: home.partnersHeroMobileVideoUrl || undefined,
+        posterUrl: home.partnersHeroPosterUrl || undefined,
+        focalPoint: home.partnersHeroFocalPoint || "center",
+        mobileFocalPoint: home.partnersHeroMobileFocalPoint || home.partnersHeroFocalPoint || "center",
+        alt: pick(locale, home.partnersHeroImageAltEn, home.partnersHeroImageAltAr) || title,
+        overlay: home.partnersHeroOverlay || "medium",
+        alignment: home.partnersHeroAlignment || "start",
+        height: home.partnersHeroHeight || "standard",
+      },
+      partners: home.partners.map((partner) => ({
+        id: partner.id,
+        name: pick(locale, partner.nameEn, partner.nameAr),
+        description: pick(locale, partner.descriptionEn ?? "", partner.descriptionAr ?? "") || undefined,
+        logo: partner.logoUrl,
+        alt: pick(locale, partner.logoAltEn, partner.logoAltAr),
+        website: partner.websiteUrl ?? undefined,
+      })),
+    },
+  };
 });
 
 export const getPolicyPageContent = cache(async (locale: Locale): Promise<PolicyPageContent> => {
@@ -1592,10 +1771,76 @@ export const getHistoryPageContent = cache(async (locale: Locale): Promise<Histo
 
 export const getContactPageContent = cache(async (locale: Locale): Promise<ContactPageContent> => {
   const base = await getHomepageContent(locale);
-  if (!process.env.DATABASE_URL) return { ...base, contactPage: { eyebrow: locale === "ar" ? "تواصل معنا" : "Contact us", title: locale === "ar" ? "ابدأ حواراً معنا." : "Start a conversation.", intro: locale === "ar" ? "أخبرنا كيف يمكننا مساعدتك." : "Tell us how we can help.", seoTitle: locale === "ar" ? "تواصل معنا — إيمدج للتطوير العقاري" : "Contact us — Image Developments", seoDescription: locale === "ar" ? "تواصل مع فريق إيمدج." : "Contact the Image Developments team." } };
-  const page = await prisma.contactPage.findUnique({ where: { id: "contactpage" } }); if (!page) throw new Error("Contact CMS content is not seeded. Run the latest database migration.");
-  const title = pick(locale, page.heroTitleEn, page.heroTitleAr); const intro = pick(locale, page.heroBodyEn, page.heroBodyAr);
-  return { ...base, contactPage: { eyebrow: pick(locale, page.heroEyebrowEn, page.heroEyebrowAr), title, intro, seoTitle: `${title} — Image Developments`, seoDescription: intro } };
+  if (!process.env.DATABASE_URL) {
+    const eyebrow = locale === "ar" ? "تواصل معنا" : "Contact us";
+    const title = locale === "ar" ? "ابدأ حواراً معنا." : "Start a conversation.";
+    const intro = locale === "ar" ? "أخبرنا كيف يمكننا مساعدتك وسيتواصل معك فريقنا." : "Tell us how we can help and our team will get back to you.";
+    return {
+      ...base,
+      contactPage: {
+        eyebrow,
+        title,
+        intro,
+        seoTitle: `${title} — Image Developments`,
+        seoDescription: intro,
+        hero: {
+          enabled: true,
+          eyebrow,
+          title,
+          body: intro,
+          ctaLabel: locale === "ar" ? "أرسل استفسارك" : "Send an Inquiry",
+          ctaUrl: "#contact-form",
+          image: undefined,
+          mobileImage: undefined,
+          focalPoint: "center",
+          mobileFocalPoint: "center",
+          alt: title,
+          overlay: "medium",
+          alignment: "start",
+          height: "standard",
+        },
+      },
+    };
+  }
+
+  const page = await prisma.contactPage.findUnique({ where: { id: "contactpage" } });
+  if (!page) throw new Error("Contact CMS content is not seeded. Run the latest database migration.");
+
+  const eyebrow = pick(locale, page.heroEyebrowEn, page.heroEyebrowAr);
+  const title = pick(locale, page.heroTitleEn, page.heroTitleAr);
+  const intro = pick(locale, page.heroBodyEn, page.heroBodyAr);
+
+  return {
+    ...base,
+    contactPage: {
+      eyebrow,
+      title,
+      intro,
+      seoTitle: `${title} — Image Developments`,
+      seoDescription: intro,
+      hero: {
+        enabled: page.heroEnabled,
+        eyebrow,
+        title,
+        body: intro,
+        ctaLabel: pick(locale, page.heroCtaLabelEn, page.heroCtaLabelAr) || undefined,
+        ctaUrl: page.heroCtaUrl || "#contact-form",
+        image: page.heroImageUrl || undefined,
+        mobileImage: page.heroMobileImageUrl || undefined,
+        mediaType: (page.heroMediaType as any) || "IMAGE",
+        videoUrl: page.heroVideoUrl || undefined,
+        mobileMediaType: (page.heroMobileMediaType as any) || "INHERIT",
+        mobileVideoUrl: page.heroMobileVideoUrl || undefined,
+        posterUrl: page.heroPosterUrl || undefined,
+        focalPoint: page.heroFocalPoint || "center",
+        mobileFocalPoint: page.heroMobileFocalPoint || page.heroFocalPoint || "center",
+        alt: pick(locale, page.heroImageAltEn, page.heroImageAltAr) || title,
+        overlay: page.heroOverlay || "medium",
+        alignment: page.heroAlignment || "start",
+        height: page.heroHeight || "standard",
+      },
+    },
+  };
 });
 
 export function fallbackMedia(copy: HomeContent) { return { hero: copy.hero.image ?? siteMedia.hero, detail: copy.about.milestones[0]?.image ?? siteMedia.detail, lifestyle: copy.lifestyle.image ?? siteMedia.lifestyle }; }

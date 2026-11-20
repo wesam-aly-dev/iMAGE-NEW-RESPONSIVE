@@ -20,19 +20,43 @@ export default async function Dashboard() {
     prisma.newsArticle.count(),
     prisma.mediaAsset.count(),
     prisma.contactSubmission.count(),
-    prisma.contactSubmission.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        subject: true,
-        status: true,
-        createdAt: true,
-        locale: true,
-      },
-    }),
+    prisma.contactSubmission
+      .findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          subject: true,
+          status: true,
+          createdAt: true,
+          locale: true,
+        },
+      })
+      .catch(async (err) => {
+        console.warn("Falling back to raw query for recent leads:", err?.message);
+        try {
+          const raw = await prisma.$queryRaw<
+            Array<{
+              id: string;
+              name: string;
+              email: string | null;
+              subject: string;
+              status: string;
+              createdAt: string | Date;
+              locale: string;
+            }>
+          >`SELECT id, name, email, subject, status, createdAt, locale FROM "ContactSubmission" ORDER BY "createdAt" DESC LIMIT 5`;
+          return raw.map((r) => ({
+            ...r,
+            createdAt: new Date(r.createdAt),
+          }));
+        } catch (rawErr) {
+          console.error("Dashboard raw query fallback error:", rawErr);
+          return [];
+        }
+      }),
     prisma.project.findMany({
       orderBy: { updatedAt: "desc" },
       take: 4,

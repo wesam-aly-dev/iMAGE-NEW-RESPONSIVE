@@ -5,6 +5,7 @@ import { Bilingual, Check } from "@/components/admin/fields";
 import { AboutMagazineEditor } from "@/components/admin/about-magazine-editor";
 import { AboutContentEditor } from "@/components/admin/about-content-editor";
 import { MediaField } from "@/components/admin/media-field";
+import { MediaUploadField } from "@/components/admin/media-upload-field";
 import { saveAbout } from "../../actions";
 import { TypographyFields } from "@/components/admin/typography-fields";
 
@@ -27,18 +28,108 @@ export default async function AboutAdmin() {
         </div>
       </header>
       <ActionForm action={saveAbout} className="admin-form" submitLabel="Save About Page">
-        {/* A. Hero */}
+        {/* 1. About Page Hero */}
         <section className="panel">
           <div className="section-title">
-            <h2>1. Page hero</h2>
+            <div>
+              <h2>1. About Page Hero</h2>
+              <p className="hint" style={{ margin: "2px 0 0", fontSize: "13px" }}>
+                High-impact hero header for the standalone About Us page.
+              </p>
+            </div>
             <Check name="aboutHeroEnabled" label="Visible" checked={home.aboutHeroEnabled} />
           </div>
-          <Bilingual base="aboutHeroEyebrow" label="Eyebrow" en={home.aboutHeroEyebrowEn} ar={home.aboutHeroEyebrowAr} required />
-          <Bilingual base="aboutHeroTitle" label="Heading" en={home.aboutHeroTitleEn} ar={home.aboutHeroTitleAr} textarea required />
-          <Bilingual base="aboutHeroBody" label="Introduction" en={home.aboutHeroBodyEn} ar={home.aboutHeroBodyAr} textarea required />
-          <Bilingual base="aboutHeroCtaLabel" label="Scroll CTA button label" en={home.aboutHeroCtaLabelEn || "Explore Our Journey"} ar={home.aboutHeroCtaLabelAr || "اكتشف رحلتنا"} />
-          <MediaField name="aboutHeroImageUrl" label="Hero image" value={home.aboutHeroImageUrl ?? home.heroMediaUrl} assets={images} kind="IMAGE" required />
-          <Bilingual base="aboutHeroImageAlt" label="Hero image alt text" en={home.aboutHeroImageAltEn} ar={home.aboutHeroImageAltAr} required />
+
+          {/* Group 1: Content & Copy */}
+          <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: "1px solid var(--line)" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 600, margin: "0 0 12px", color: "var(--foreground)" }}>
+              Content &amp; Copy / النصوص والمحتوى
+            </h3>
+            <Bilingual base="aboutHeroEyebrow" label="Eyebrow" en={home.aboutHeroEyebrowEn} ar={home.aboutHeroEyebrowAr} required />
+            <Bilingual base="aboutHeroTitle" label="Heading" en={home.aboutHeroTitleEn} ar={home.aboutHeroTitleAr} textarea required />
+            <Bilingual base="aboutHeroBody" label="Introduction / Supporting narrative" en={home.aboutHeroBodyEn} ar={home.aboutHeroBodyAr} textarea required />
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginTop: "12px" }}>
+              <Bilingual base="aboutHeroCtaLabel" label="Scroll CTA button label" en={home.aboutHeroCtaLabelEn || "Explore Our Journey"} ar={home.aboutHeroCtaLabelAr || "اكتشف رحلتنا"} />
+              <div className="field">
+                <label htmlFor="aboutHeroCtaUrl">Scroll CTA destination</label>
+                <input
+                  type="text"
+                  id="aboutHeroCtaUrl"
+                  name="aboutHeroCtaUrl"
+                  defaultValue={home.aboutHeroCtaUrl || "#about"}
+                  placeholder="#about or /projects"
+                />
+                <span className="field-hint" style={{ fontSize: "11px", color: "var(--muted)", marginTop: "4px", display: "block" }}>
+                  Timeline anchor (<code>#about</code>) or destination URL.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Group 2: Media & Imagery */}
+          <div>
+            <h3 style={{ fontSize: "14px", fontWeight: 600, margin: "0 0 6px", color: "var(--foreground)" }}>
+              Media &amp; Imagery / وسائط وخلفيات الهيرو
+            </h3>
+            <p className="hint" style={{ fontSize: "12.5px", color: "var(--muted)", marginBottom: "16px" }}>
+              The desktop hero image serves as the primary visual and acts as the fallback for mobile screens. The mobile hero image is an optional override; removing it immediately restores the desktop fallback without deleting the desktop asset.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px", marginBottom: "16px" }}>
+              {/* Desktop Hero Image */}
+              <div style={{ border: "1px solid var(--line)", borderRadius: "8px", padding: "16px", background: "#fafbfa" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+                  <h4 style={{ fontSize: "13px", fontWeight: 600, margin: 0 }}>Desktop Hero Image (Primary)</h4>
+                  <span style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Required</span>
+                </div>
+                <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: "0 0 12px" }}>
+                  High-resolution landscape image displayed on desktop &amp; tablet viewports (and on mobile whenever no mobile override is supplied).
+                </p>
+                <MediaUploadField
+                  name="aboutHeroImageUrl"
+                  label="Desktop Hero Image"
+                  value={home.aboutHeroImageUrl ?? home.heroMediaUrl}
+                  existingAssets={images}
+                  kind="IMAGE"
+                  required
+                  showFocalPoint
+                  focalPointName="aboutHeroFocalPoint"
+                  focalPointValue={home.aboutHeroFocalPoint || "center"}
+                />
+              </div>
+
+              {/* Mobile Hero Image (Optional Override) */}
+              <div style={{ border: "1px solid var(--line)", borderRadius: "8px", padding: "16px", background: "#fafbfa" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+                  <h4 style={{ fontSize: "13px", fontWeight: 600, margin: 0 }}>Mobile Hero Image (Optional Override)</h4>
+                  <span style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Mobile only (≤ 800px)</span>
+                </div>
+                <p style={{ fontSize: "11.5px", color: "var(--muted)", margin: "0 0 12px" }}>
+                  Independent image tailored for vertical mobile viewports. If left blank or removed, the desktop image is seamlessly used as the fallback.
+                </p>
+                <MediaUploadField
+                  name="aboutHeroMobileImageUrl"
+                  label="Mobile Hero Image"
+                  value={home.aboutHeroMobileImageUrl || ""}
+                  existingAssets={images}
+                  kind="IMAGE"
+                  showFocalPoint
+                  focalPointName="aboutHeroMobileFocalPoint"
+                  focalPointValue={home.aboutHeroMobileFocalPoint || "center"}
+                />
+              </div>
+            </div>
+
+            {/* Accessibility Alt Text */}
+            <Bilingual
+              base="aboutHeroImageAlt"
+              label="Hero image alt text (Accessibility &amp; SEO)"
+              en={home.aboutHeroImageAltEn}
+              ar={home.aboutHeroImageAltAr}
+              required
+            />
+          </div>
         </section>
 
         {/* B. Who We Are */}

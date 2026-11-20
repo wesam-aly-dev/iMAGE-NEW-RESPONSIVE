@@ -65,17 +65,32 @@ export function LeadExport({ leads }: { leads: ExportLead[] }) {
   }
 
   return (
-    <div className="lead-export" aria-label="Export leads">
-      <label>
-        <span>Export format</span>
-        <select value={format} onChange={(event) => setFormat(event.target.value as ExportFormat)}>
-          <option value="csv">Excel (CSV)</option>
-          <option value="pdf">PDF</option>
-          <option value="json">JSON</option>
+    <div className="lead-export" aria-label="Export leads" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", margin: 0, fontSize: "13px" }}>
+        <span style={{ fontWeight: 500, color: "var(--muted)" }}>Format:</span>
+        <select
+          value={format}
+          onChange={(event) => setFormat(event.target.value as ExportFormat)}
+          style={{ width: "auto", padding: "6px 10px", fontSize: "12.5px", height: "34px", borderRadius: "var(--radius-sm)" }}
+        >
+          <option value="csv">CSV (.csv)</option>
+          <option value="pdf">Print / PDF (.pdf)</option>
+          <option value="json">JSON (.json)</option>
         </select>
       </label>
-      <button className="primary" type="button" onClick={exportLeads} disabled={!leads.length}>
-        Export {leads.length} {leads.length === 1 ? "lead" : "leads"}
+      <button
+        className="secondary"
+        type="button"
+        onClick={exportLeads}
+        disabled={!leads.length}
+        style={{ height: "34px", padding: "0 13px", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px" }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span>Export {leads.length} {leads.length === 1 ? "lead" : "leads"}</span>
       </button>
     </div>
   );

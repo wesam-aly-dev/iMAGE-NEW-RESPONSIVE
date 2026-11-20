@@ -128,7 +128,7 @@ export function OpeningMontageEditor({
       </div>
 
       {/* Slot Selector Tabs */}
-      <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "8px", marginBottom: "16px" }}>
+      <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", marginBottom: "18px" }}>
         {SLOTS_META.map((slot) => {
           const current = state[slot.id];
           const hasImage = Boolean(current.desktop || current.mobile);
@@ -140,27 +140,30 @@ export function OpeningMontageEditor({
               type="button"
               onClick={() => setActiveSlot(slot.id)}
               style={{
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: isSelected ? "2px solid #2a4534" : "1px solid var(--border)",
-                backgroundColor: isSelected ? "rgba(42, 69, 52, 0.08)" : "transparent",
-                fontWeight: isSelected ? 600 : 400,
-                fontSize: "12px",
+                padding: "8px 14px",
+                borderRadius: "var(--radius-sm)",
+                border: isSelected ? "1px solid var(--forest)" : "1px solid var(--line)",
+                backgroundColor: isSelected ? "var(--forest)" : "#ffffff",
+                color: isSelected ? "#ffffff" : "var(--ink)",
+                fontWeight: isSelected ? 600 : 500,
+                fontSize: "12.5px",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "8px",
+                boxShadow: isSelected ? "0 2px 6px rgba(30, 58, 41, 0.18)" : "none",
+                transition: "all 0.16s ease",
               }}
             >
               <span>{slot.name}</span>
               {hasImage && (
                 <span
                   style={{
-                    width: "6px",
-                    height: "6px",
+                    width: "7px",
+                    height: "7px",
                     borderRadius: "50%",
-                    backgroundColor: "#15803d",
+                    backgroundColor: isSelected ? "var(--peach)" : "#2e8b57",
                   }}
                   title="Image configured"
                 />

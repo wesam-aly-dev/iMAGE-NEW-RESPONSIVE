@@ -384,7 +384,7 @@ export type CareerJobItem = {
 
 export type CareersPageContent = HomeContent & {
   careersPage: {
-    hero: { eyebrow: string; title: string; intro: string; image: string };
+    hero: PageHeroConfig & { intro?: string };
     lifeAtImage: { eyebrow: string; title: string; body: string; images: string[] };
     jobs: CareerJobItem[];
     seoTitle: string;
@@ -539,15 +539,7 @@ export type ProjectsPageContent = HomeContent & {
 
 export type AboutPageContent = HomeContent & {
   aboutPage: {
-    hero: {
-      enabled: boolean;
-      eyebrow: string;
-      title: string;
-      body: string;
-      image?: string;
-      alt: string;
-      ctaLabel?: string;
-    };
+    hero: PageHeroConfig;
     whoWeAre?: {
       enabled: boolean;
       eyebrow: string;
@@ -594,16 +586,45 @@ export type AboutPageContent = HomeContent & {
   };
 };
 
+export type PageHeroConfig = {
+  enabled?: boolean;
+  eyebrow?: string;
+  title: string;
+  body?: string;
+  intro?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  image?: string;
+  mobileImage?: string;
+  focalPoint?: string;
+  mobileFocalPoint?: string;
+  alt?: string;
+  overlay?: "subtle" | "medium" | "dark" | string;
+  alignment?: "start" | "center" | string;
+  height?: "compact" | "standard" | "large" | "fullscreen" | string;
+  mediaType?: "IMAGE" | "VIDEO";
+  videoUrl?: string;
+  mobileMediaType?: "INHERIT" | "IMAGE" | "VIDEO";
+  mobileVideoUrl?: string;
+  posterUrl?: string;
+};
+
 export type TeamPageContent = HomeContent & {
   teamPage: {
-    eyebrow: string; title: string; intro: string;
+    hero?: PageHeroConfig;
+    eyebrow: string;
+    title: string;
+    intro: string;
     members: { id: string; name: string; role: string; bio: string; image: string; alt: string }[];
   };
 };
 
 export type PartnersPageContent = HomeContent & {
   partnersPage: {
-    eyebrow: string; title: string; intro: string;
+    hero?: PageHeroConfig;
+    eyebrow: string;
+    title: string;
+    intro: string;
     partners: { id: string; name: string; description?: string; logo: string; alt: string; website?: string }[];
   };
 };
@@ -627,7 +648,14 @@ export type TermsPageContent = HomeContent & {
 export type HistoryPageContent = AboutPageContent;
 
 export type ContactPageContent = HomeContent & {
-  contactPage: { eyebrow: string; title: string; intro: string; seoTitle: string; seoDescription: string };
+  contactPage: {
+    hero?: PageHeroConfig;
+    eyebrow: string;
+    title: string;
+    intro: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
 };
 
 export const siteMedia = {

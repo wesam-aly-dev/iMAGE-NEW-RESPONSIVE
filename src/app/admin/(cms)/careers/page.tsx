@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CareerJobForm } from "@/components/admin/career-job-form";
 import { ActionForm } from "@/components/admin/action-form";
 import { Bilingual } from "@/components/admin/fields";
-import { MediaField } from "@/components/admin/media-field";
+import { PageHeroEditor } from "@/components/admin/page-hero-editor";
 import {
   deleteCareerJob,
   toggleCareerJobStatus,
@@ -25,7 +25,7 @@ export default async function CareersAdminPage() {
     }),
     prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } }),
     prisma.mediaAsset.findMany({
-      where: { kind: "IMAGE" },
+      where: { OR: [{ kind: "IMAGE" }, { kind: "VIDEO" }] },
       orderBy: { createdAt: "desc" },
       select: { id: true, url: true, filename: true, mimeType: true, size: true, kind: true },
     }),
@@ -44,31 +44,57 @@ export default async function CareersAdminPage() {
       {/* Careers Page Content & Imagery Section */}
       <section style={{ marginBottom: "48px" }}>
         <ActionForm action={saveCareersPageContent} submitLabel="Save Careers Content">
-          <div className="section-title">
-            <div>
-              <h2>Careers Page Content & Imagery</h2>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>
-                Edit the public Careers page hero, company culture headline, intro, and workplace imagery.
-              </span>
+          <PageHeroEditor
+            prefix="careersHero"
+            sectionTitle="1. Careers Page Hero"
+            eyebrowBase="careersHeroEyebrow"
+            titleBase="careersHeroTitle"
+            bodyBase="careersHeroIntro"
+            defaultCtaUrl="#open-positions"
+            defaultCtaLabelEn="Explore Opportunities"
+            defaultCtaLabelAr="استكشف الفرص المتاحة"
+            values={{
+              enabled: home.careersHeroEnabled ?? true,
+              eyebrowEn: home.careersHeroEyebrowEn,
+              eyebrowAr: home.careersHeroEyebrowAr,
+              titleEn: home.careersHeroTitleEn,
+              titleAr: home.careersHeroTitleAr,
+              bodyEn: home.careersHeroIntroEn,
+              bodyAr: home.careersHeroIntroAr,
+              ctaLabelEn: home.careersHeroCtaLabelEn ?? "Explore Opportunities",
+              ctaLabelAr: home.careersHeroCtaLabelAr ?? "استكشف الفرص المتاحة",
+              ctaUrl: home.careersHeroCtaUrl ?? "#open-positions",
+              imageUrl: home.careersHeroImageUrl,
+              mobileImageUrl: home.careersHeroMobileImageUrl,
+              mediaType: home.careersHeroMediaType,
+              videoUrl: home.careersHeroVideoUrl,
+              mobileMediaType: home.careersHeroMobileMediaType,
+              mobileVideoUrl: home.careersHeroMobileVideoUrl,
+              posterUrl: home.careersHeroPosterUrl,
+              focalPoint: home.careersHeroFocalPoint ?? "center",
+              mobileFocalPoint: home.careersHeroMobileFocalPoint ?? "center",
+              imageAltEn: home.careersHeroImageAltEn,
+              imageAltAr: home.careersHeroImageAltAr,
+              overlay: home.careersHeroOverlay ?? "medium",
+              alignment: home.careersHeroAlignment ?? "start",
+              height: home.careersHeroHeight ?? "fullscreen",
+            }}
+            assets={images}
+          />
+
+          <section className="panel" style={{ marginTop: "24px" }}>
+            <div className="section-title">
+              <div>
+                <h2>2. Life at Image (Culture &amp; Values)</h2>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  Company culture narrative, pillars, and workplace environment messaging.
+                </span>
+              </div>
             </div>
-          </div>
-
-          <h3 style={{ fontSize: "14px", fontWeight: 600, marginTop: "16px", marginBottom: "8px", color: "var(--forest, #123026)" }}>
-            Careers Hero
-          </h3>
-          <Bilingual base="careersHeroEyebrow" label="Hero Eyebrow" en={home.careersHeroEyebrowEn} ar={home.careersHeroEyebrowAr} />
-          <Bilingual base="careersHeroTitle" label="Hero Headline" en={home.careersHeroTitleEn} ar={home.careersHeroTitleAr} required />
-          <Bilingual base="careersHeroIntro" label="Hero Introduction" en={home.careersHeroIntroEn} ar={home.careersHeroIntroAr} textarea required />
-          <div style={{ marginTop: "12px" }}>
-            <MediaField name="careersHeroImageUrl" label="Careers Hero Workplace Image" value={home.careersHeroImageUrl || undefined} assets={images} kind="IMAGE" />
-          </div>
-
-          <h3 style={{ fontSize: "14px", fontWeight: 600, marginTop: "24px", marginBottom: "8px", color: "var(--forest, #123026)" }}>
-            Life at Image (Culture & Values)
-          </h3>
-          <Bilingual base="careersLifeEyebrow" label="Culture Eyebrow" en={home.careersLifeEyebrowEn} ar={home.careersLifeEyebrowAr} />
-          <Bilingual base="careersLifeTitle" label="Culture Section Title" en={home.careersLifeTitleEn} ar={home.careersLifeTitleAr} required />
-          <Bilingual base="careersLifeBody" label="Culture Description" en={home.careersLifeBodyEn} ar={home.careersLifeBodyAr} textarea required />
+            <Bilingual base="careersLifeEyebrow" label="Culture Eyebrow" en={home.careersLifeEyebrowEn} ar={home.careersLifeEyebrowAr} />
+            <Bilingual base="careersLifeTitle" label="Culture Section Title" en={home.careersLifeTitleEn} ar={home.careersLifeTitleAr} required />
+            <Bilingual base="careersLifeBody" label="Culture Description" en={home.careersLifeBodyEn} ar={home.careersLifeBodyAr} textarea required />
+          </section>
         </ActionForm>
       </section>
 

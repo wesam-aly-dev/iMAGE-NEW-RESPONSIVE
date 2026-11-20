@@ -111,7 +111,7 @@ export function HeroMediaEditor({
           </div>
 
           {/* Media Type Selector */}
-          <div style={{ display: "inline-flex", background: "#eaeaea", padding: "3px", borderRadius: "6px" }}>
+          <div style={{ display: "inline-flex", background: "#e8ede6", padding: "3px", borderRadius: "var(--radius-sm)" }}>
             <button
               type="button"
               onClick={() => setDesktopType("IMAGE")}
@@ -124,11 +124,11 @@ export function HeroMediaEditor({
                 cursor: "pointer",
                 background: desktopType === "IMAGE" ? "#ffffff" : "transparent",
                 color: desktopType === "IMAGE" ? "var(--forest, #152a20)" : "var(--muted, #666)",
-                boxShadow: desktopType === "IMAGE" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                boxShadow: desktopType === "IMAGE" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
-              📷 Image
+              Image
             </button>
             <button
               type="button"
@@ -142,11 +142,11 @@ export function HeroMediaEditor({
                 cursor: "pointer",
                 background: desktopType === "VIDEO" ? "#ffffff" : "transparent",
                 color: desktopType === "VIDEO" ? "var(--forest, #152a20)" : "var(--muted, #666)",
-                boxShadow: desktopType === "VIDEO" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                boxShadow: desktopType === "VIDEO" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
-              🎬 Video
+              Video
             </button>
           </div>
         </div>
@@ -251,7 +251,7 @@ export function HeroMediaEditor({
           </div>
 
           {/* Mobile Media Type Selector */}
-          <div style={{ display: "inline-flex", background: "#eaeaea", padding: "3px", borderRadius: "6px" }}>
+          <div style={{ display: "inline-flex", background: "#e8ede6", padding: "3px", borderRadius: "var(--radius-sm)" }}>
             <button
               type="button"
               onClick={() => setMobileType("INHERIT")}
@@ -264,11 +264,11 @@ export function HeroMediaEditor({
                 cursor: "pointer",
                 background: mobileType === "INHERIT" ? "#ffffff" : "transparent",
                 color: mobileType === "INHERIT" ? "var(--forest, #152a20)" : "var(--muted, #666)",
-                boxShadow: mobileType === "INHERIT" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                boxShadow: mobileType === "INHERIT" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
-              🔄 Inherit Desktop
+              Inherit Desktop
             </button>
             <button
               type="button"
@@ -282,11 +282,11 @@ export function HeroMediaEditor({
                 cursor: "pointer",
                 background: mobileType === "IMAGE" ? "#ffffff" : "transparent",
                 color: mobileType === "IMAGE" ? "var(--forest, #152a20)" : "var(--muted, #666)",
-                boxShadow: mobileType === "IMAGE" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                boxShadow: mobileType === "IMAGE" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
-              📷 Mobile Image
+              Mobile Image
             </button>
             <button
               type="button"
@@ -300,11 +300,11 @@ export function HeroMediaEditor({
                 cursor: "pointer",
                 background: mobileType === "VIDEO" ? "#ffffff" : "transparent",
                 color: mobileType === "VIDEO" ? "var(--forest, #152a20)" : "var(--muted, #666)",
-                boxShadow: mobileType === "VIDEO" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                boxShadow: mobileType === "VIDEO" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
-              🎬 Mobile Video
+              Mobile Video
             </button>
           </div>
         </div>

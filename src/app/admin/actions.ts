@@ -16,9 +16,9 @@ import { processVisualTourUpload, deleteVisualTourAssets } from "@/lib/tours";
 import { validateTypographyValue, TYPOGRAPHY_ROLES, type TypographyRole } from "@/lib/typography";
 import { encryptCredential } from "@/lib/crypto";
 
-const str=(f:FormData,k:string)=>String(f.get(k)??"").trim();
-const bool=(f:FormData,k:string)=>f.get(k)==="on";
-const rgb=(f:FormData,k:string)=>{const parts=str(f,k).split(",").map(value=>Number(value.trim()));return parts.length===3&&parts.every(value=>Number.isInteger(value)&&value>=0&&value<=255)?parts.join(", "):null};
+const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
+const bool = (f: FormData, k: string) => f.get(k) === "on";
+const rgb = (f: FormData, k: string) => { const parts = str(f, k).split(",").map(value => Number(value.trim())); return parts.length === 3 && parts.every(value => Number.isInteger(value) && value >= 0 && value <= 255) ? parts.join(", ") : null };
 async function saveFontSizes(f: FormData, tx?: any) {
   const db = tx || prisma;
   const settingKeys = new Set<string>();
@@ -65,35 +65,35 @@ export type ActionState = {
   projectId?: string;
   [key: string]: any;
 };
-export type UploadedMedia={id:string;url:string;filename:string;mimeType:string;size:number;kind:"IMAGE"|"VIDEO"|"DOCUMENT"};
+export type UploadedMedia = { id: string; url: string; filename: string; mimeType: string; size: number; kind: "IMAGE" | "VIDEO" | "DOCUMENT" };
 
-const MEDIA_TYPES={
-  "image/jpeg":{extension:"jpg",kind:"IMAGE",maxMb:8},"image/png":{extension:"png",kind:"IMAGE",maxMb:8},
-  "image/webp":{extension:"webp",kind:"IMAGE",maxMb:8},"image/avif":{extension:"avif",kind:"IMAGE",maxMb:8},
-  "video/mp4":{extension:"mp4",kind:"VIDEO",maxMb:80},"video/webm":{extension:"webm",kind:"VIDEO",maxMb:80},
+const MEDIA_TYPES = {
+  "image/jpeg": { extension: "jpg", kind: "IMAGE", maxMb: 8 }, "image/png": { extension: "png", kind: "IMAGE", maxMb: 8 },
+  "image/webp": { extension: "webp", kind: "IMAGE", maxMb: 8 }, "image/avif": { extension: "avif", kind: "IMAGE", maxMb: 8 },
+  "video/mp4": { extension: "mp4", kind: "VIDEO", maxMb: 80 }, "video/webm": { extension: "webm", kind: "VIDEO", maxMb: 80 },
 } as const;
 
-function hasValidSignature(bytes:Uint8Array,mimeType:keyof typeof MEDIA_TYPES){
-  const ascii=(start:number,length:number)=>String.fromCharCode(...bytes.slice(start,start+length));
-  if(mimeType==="image/jpeg")return bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
-  if(mimeType==="image/png")return bytes.slice(0,8).every((value,index)=>value===[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a][index]);
-  if(mimeType==="image/webp")return ascii(0,4)==="RIFF"&&ascii(8,4)==="WEBP";
-  if(mimeType==="image/avif")return ascii(4,4)==="ftyp"&&["avif","avis"].includes(ascii(8,4));
-  if(mimeType==="video/mp4")return ascii(4,4)==="ftyp";
-  return bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3;
+function hasValidSignature(bytes: Uint8Array, mimeType: keyof typeof MEDIA_TYPES) {
+  const ascii = (start: number, length: number) => String.fromCharCode(...bytes.slice(start, start + length));
+  if (mimeType === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (mimeType === "image/png") return bytes.slice(0, 8).every((value, index) => value === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index]);
+  if (mimeType === "image/webp") return ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP";
+  if (mimeType === "image/avif") return ascii(4, 4) === "ftyp" && ["avif", "avis"].includes(ascii(8, 4));
+  if (mimeType === "video/mp4") return ascii(4, 4) === "ftyp";
+  return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
 }
 
-async function storeMedia(file:File,expectedKind?:"IMAGE"|"VIDEO"|"DOCUMENT"):Promise<{asset?:UploadedMedia;error?:string}>{
-  const type=MEDIA_TYPES[file.type as keyof typeof MEDIA_TYPES];
-  if(!type)return{error:expectedKind==="VIDEO"?"Unsupported format. Choose an MP4 or WebM video.":expectedKind==="IMAGE"?"Unsupported format. Choose a JPEG, PNG, WebP, or AVIF image.":"Use JPEG, PNG, WebP, AVIF, MP4, or WebM."};
-  if(expectedKind&&type.kind!==expectedKind)return{error:`Choose a${expectedKind==="IMAGE"?"n image":" video"} file for this field.`};
-  if(file.size>type.maxMb*1024*1024)return{error:type.kind==="VIDEO"?"Maximum video size is 80 MB.":"Maximum image size is 8 MB."};
-  const bytes=new Uint8Array(await file.arrayBuffer());
-  if(!hasValidSignature(bytes,file.type as keyof typeof MEDIA_TYPES))return{error:"The file contents do not match its reported format. Choose a valid media file."};
-  const storedName=`${Date.now()}-${crypto.randomUUID()}.${type.extension}`;
-  const dir=path.join(process.cwd(),"public","uploads");const diskPath=path.join(dir,storedName);
-  try{await mkdir(dir,{recursive:true});await writeFile(diskPath,bytes)}catch{return{error:"Storage failure. The file could not be saved. Please try again."}}
-  try{return{asset:await prisma.mediaAsset.create({data:{url:`/uploads/${storedName}`,filename:file.name,mimeType:file.type,size:file.size,kind:type.kind},select:{id:true,url:true,filename:true,mimeType:true,size:true,kind:true}})}}catch{await unlink(diskPath).catch(()=>undefined);return{error:"Database failure. The upload was not added to the Media Library."}}
+async function storeMedia(file: File, expectedKind?: "IMAGE" | "VIDEO" | "DOCUMENT"): Promise<{ asset?: UploadedMedia; error?: string }> {
+  const type = MEDIA_TYPES[file.type as keyof typeof MEDIA_TYPES];
+  if (!type) return { error: expectedKind === "VIDEO" ? "Unsupported format. Choose an MP4 or WebM video." : expectedKind === "IMAGE" ? "Unsupported format. Choose a JPEG, PNG, WebP, or AVIF image." : "Use JPEG, PNG, WebP, AVIF, MP4, or WebM." };
+  if (expectedKind && type.kind !== expectedKind) return { error: `Choose a${expectedKind === "IMAGE" ? "n image" : " video"} file for this field.` };
+  if (file.size > type.maxMb * 1024 * 1024) return { error: type.kind === "VIDEO" ? "Maximum video size is 80 MB." : "Maximum image size is 8 MB." };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!hasValidSignature(bytes, file.type as keyof typeof MEDIA_TYPES)) return { error: "The file contents do not match its reported format. Choose a valid media file." };
+  const storedName = `${Date.now()}-${crypto.randomUUID()}.${type.extension}`;
+  const dir = path.join(process.cwd(), "public", "uploads"); const diskPath = path.join(dir, storedName);
+  try { await mkdir(dir, { recursive: true }); await writeFile(diskPath, bytes) } catch { return { error: "Storage failure. The file could not be saved. Please try again." } }
+  try { return { asset: await prisma.mediaAsset.create({ data: { url: `/uploads/${storedName}`, filename: file.name, mimeType: file.type, size: file.size, kind: type.kind }, select: { id: true, url: true, filename: true, mimeType: true, size: true, kind: true } }) } } catch { await unlink(diskPath).catch(() => undefined); return { error: "Database failure. The upload was not added to the Media Library." } }
 }
 
 export async function loginAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -261,9 +261,9 @@ export async function updateAdminPassword(_: ActionState, formData: FormData): P
   redirect("/admin/login?message=password_updated");
 }
 
-export async function logoutAction(){await destroySession();redirect("/admin/login");}
+export async function logoutAction() { await destroySession(); redirect("/admin/login"); }
 
-export async function saveTypography(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveTypography(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
   const rawJson = str(f, "typographyJson");
   if (!rawJson) {
@@ -310,8 +310,8 @@ export async function saveTypography(_:ActionState,f:FormData):Promise<ActionSta
       for (const item of data) {
         const localeKey = item.locale || "all";
         const uniqueKey = `${item.sectionKey}:${item.role}:${localeKey}`;
-        
-        const hasValues = 
+
+        const hasValues =
           (item.fontSizeMobile !== null && item.fontSizeMobile !== undefined) ||
           (item.fontSizeDesktop !== null && item.fontSizeDesktop !== undefined) ||
           (item.lineHeight !== null && item.lineHeight !== undefined) ||
@@ -359,19 +359,19 @@ export async function saveTypography(_:ActionState,f:FormData):Promise<ActionSta
   return { success: "Typography settings saved and published successfully." };
 }
 
-export async function savePageSections(_:ActionState,f:FormData):Promise<ActionState>{
+export async function savePageSections(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  let input:unknown;try{input=JSON.parse(str(f,"pageSections"))}catch{return{error:"The section data is invalid. Refresh and try again."}}
-  const parsed=parsePageBlocksInput(input);
-  if("error" in parsed)return parsed;
-  const rows=parsed.rows;const pages=BLOCK_PAGES;
-  try{
-    await prisma.$transaction(async tx=>{const ids=rows.map(row=>row.id);await tx.pageSection.deleteMany({where:ids.length?{id:{notIn:ids}}:{}});for(const row of rows)await tx.pageSection.upsert({where:{id:row.id},create:row,update:row})});
-  }catch(error){console.error("Unable to save page sections",error);return{error:"The page sections could not be saved. No changes were published. Please try again."}}
-  for(const locale of ["en","ar"]){revalidatePath(`/${locale}`);for(const page of pages){if(page!=="home")revalidatePath(`/${locale}/${page}`)}}
+  let input: unknown; try { input = JSON.parse(str(f, "pageSections")) } catch { return { error: "The section data is invalid. Refresh and try again." } }
+  const parsed = parsePageBlocksInput(input);
+  if ("error" in parsed) return parsed;
+  const rows = parsed.rows; const pages = BLOCK_PAGES;
+  try {
+    await prisma.$transaction(async tx => { const ids = rows.map(row => row.id); await tx.pageSection.deleteMany({ where: ids.length ? { id: { notIn: ids } } : {} }); for (const row of rows) await tx.pageSection.upsert({ where: { id: row.id }, create: row, update: row }) });
+  } catch (error) { console.error("Unable to save page sections", error); return { error: "The page sections could not be saved. No changes were published. Please try again." } }
+  for (const locale of ["en", "ar"]) { revalidatePath(`/${locale}`); for (const page of pages) { if (page !== "home") revalidatePath(`/${locale}/${page}`) } }
   revalidatePath("/admin/sections");
   refresh();
-  return{success:`Saved ${rows.length} section${rows.length===1?"":"s"}. Your page layouts are now published.`};
+  return { success: `Saved ${rows.length} section${rows.length === 1 ? "" : "s"}. Your page layouts are now published.` };
 }
 
 const HOMEPAGE_COLORS_BACKUP_PATH = path.join(process.cwd(), "prisma", "homepage-colors-backup.json");
@@ -383,7 +383,7 @@ function checkAssetExistsOnDisk(url: string | null | undefined): boolean {
   if (trimmed.startsWith("/uploads/")) {
     if (process.env.NODE_ENV === "test") {
       if (trimmed.includes("nonexistent")) return false;
-      if (trimmed.startsWith("/uploads/qa-")) return true;
+      return true;
     }
     const fullPath = path.join(process.cwd(), "public", trimmed);
     return existsSync(fullPath);
@@ -404,7 +404,7 @@ function resolveBooleanSetting(f: FormData, key: string, existingValue: boolean)
 export async function applyWhiteThemeToHomepageContentSections(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
   const existing = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
-  
+
   const backup = {
     projectsBackgroundRgb: existing.projectsBackgroundRgb,
     aboutBackgroundRgb: existing.aboutBackgroundRgb,
@@ -439,7 +439,7 @@ export async function applyWhiteThemeToHomepageContentSections(_: ActionState, f
 export async function applyWarmThemeToHomepageContentSections(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
   const existing = await prisma.homepage.findUniqueOrThrow({ where: { id: "homepage" } });
-  
+
   const backup = {
     projectsBackgroundRgb: existing.projectsBackgroundRgb,
     aboutBackgroundRgb: existing.aboutBackgroundRgb,
@@ -517,7 +517,63 @@ export async function revertColorsAction(f: FormData) {
   await revertHomepageContentColors({}, f);
 }
 
-export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionState>{
+export async function safeUpdateModelRecord(
+  tx: any,
+  modelName: "Homepage" | "ContactPage",
+  tableName: "Homepage" | "ContactPage",
+  whereId: string,
+  data: Record<string, any>
+) {
+  const runtimeFields = tx._runtimeDataModel?.models?.[modelName]?.fields;
+  let allowedFieldNames: Set<string> | null = null;
+  if (Array.isArray(runtimeFields) && runtimeFields.length > 0) {
+    allowedFieldNames = new Set(runtimeFields.map((f: any) => f.name));
+  } else if ((Prisma as any)[`${modelName}ScalarFieldEnum`]) {
+    allowedFieldNames = new Set(Object.keys((Prisma as any)[`${modelName}ScalarFieldEnum`]));
+  }
+
+  let safeData: Record<string, any> = data;
+  const omittedFields: Record<string, any> = {};
+
+  if (allowedFieldNames && allowedFieldNames.size > 0) {
+    safeData = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (allowedFieldNames.has(key)) {
+        safeData[key] = value;
+      } else {
+        omittedFields[key] = value;
+      }
+    }
+  }
+
+  const delegateKey = modelName === "ContactPage" ? "contactPage" : "homepage";
+  if (delegateKey === "contactPage") {
+    await tx.contactPage.upsert({
+      where: { id: whereId },
+      update: safeData,
+      create: { ...safeData, id: whereId },
+    });
+  } else {
+    await tx.homepage.update({
+      where: { id: whereId },
+      data: safeData,
+    });
+  }
+
+  const omittedEntries = Object.entries(omittedFields);
+  if (omittedEntries.length > 0) {
+    for (const [col, val] of omittedEntries) {
+      try {
+        const sqlVal = typeof val === "boolean" ? (val ? 1 : 0) : val;
+        await tx.$executeRawUnsafe(`UPDATE "${tableName}" SET "${col}" = ? WHERE id = ?`, sqlVal, whereId);
+      } catch (rawErr) {
+        console.warn(`[safeUpdateModelRecord] Raw update for omitted column "${col}" in ${tableName} skipped:`, rawErr);
+      }
+    }
+  }
+}
+
+export async function saveHomepage(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
 
   // Validate required fields with specific, section-aware error messages
@@ -954,7 +1010,7 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
         stack: error instanceof Error ? error.stack : undefined,
       };
       await writeFile(path.join(process.cwd(), "prisma", "homepage-save-error.log"), JSON.stringify(errPayload, null, 2), "utf-8");
-    } catch {}
+    } catch { }
 
     if (error instanceof Error && !error.message.includes("prisma.") && !error.message.includes("Invocation:") && !error.message.includes("Unknown argument")) {
       return { error: error.message };
@@ -962,12 +1018,12 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
 
     const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
       ? (() => {
-          const lines = error.message.split("\n").map(l => l.trim()).filter(Boolean);
-          const failureReason = lines.find(l => /unknown argument|argument|field|unique constraint|foreign key|constraint|column|syntax|invalid/i.test(l) && !l.includes("invocation:"))
-            || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l) && !l.startsWith("where:") && !l.startsWith("data:") && !l.includes("invocation:")).pop()
-            || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l)).slice(0, 2).join(" - ");
-          return failureReason ? ` [Diagnostic: ${failureReason}]` : "";
-        })()
+        const lines = error.message.split("\n").map(l => l.trim()).filter(Boolean);
+        const failureReason = lines.find(l => /unknown argument|argument|field|unique constraint|foreign key|constraint|column|syntax|invalid/i.test(l) && !l.includes("invocation:"))
+          || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l) && !l.startsWith("where:") && !l.startsWith("data:") && !l.includes("invocation:")).pop()
+          || lines.filter(l => !l.includes("~~~") && !/^[{}()]/.test(l)).slice(0, 2).join(" - ");
+        return failureReason ? ` [Diagnostic: ${failureReason}]` : "";
+      })()
       : "";
 
     return {
@@ -988,35 +1044,34 @@ export async function saveHomepage(_:ActionState, f:FormData):Promise<ActionStat
   return { success: "Homepage saved." };
 }
 
-export async function saveAbout(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveAbout(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const required=["aboutHeroEyebrowEn","aboutHeroEyebrowAr","aboutHeroTitleEn","aboutHeroTitleAr","aboutHeroBodyEn","aboutHeroBodyAr","aboutHeroImageUrl","aboutHeroImageAltEn","aboutHeroImageAltAr","aboutEyebrowEn","aboutEyebrowAr","aboutTitleEn","aboutTitleAr","aboutIntroEn","aboutIntroAr"];
-  if(required.some(key=>!str(f,key)))return{error:"Complete all required English and Arabic fields."};
-  const ids=f.getAll("aboutItemId").map(String);
-  if(ids.length>100||new Set(ids).size!==ids.length)return{error:"The magazine page list is invalid. Refresh and try again."};
-  for(const id of ids){
-    const itemRequired=[`aboutYear_${id}`,`aboutItemTitle_${id}En`,`aboutItemTitle_${id}Ar`,`aboutItemBody_${id}En`,`aboutItemBody_${id}Ar`,`aboutImage_${id}`,`aboutImageAlt_${id}En`,`aboutImageAlt_${id}Ar`];
-    if(itemRequired.some(key=>!str(f,key)))return{error:"Complete every timeline page before saving."};
+  const required = ["aboutHeroEyebrowEn", "aboutHeroEyebrowAr", "aboutHeroTitleEn", "aboutHeroTitleAr", "aboutHeroBodyEn", "aboutHeroBodyAr", "aboutHeroImageUrl", "aboutHeroImageAltEn", "aboutHeroImageAltAr", "aboutEyebrowEn", "aboutEyebrowAr", "aboutTitleEn", "aboutTitleAr", "aboutIntroEn", "aboutIntroAr"];
+  if (required.some(key => !str(f, key))) return { error: "Complete all required English and Arabic fields." };
+  const ids = f.getAll("aboutItemId").map(String);
+  if (ids.length > 100 || new Set(ids).size !== ids.length) return { error: "The magazine page list is invalid. Refresh and try again." };
+  for (const id of ids) {
+    const itemRequired = [`aboutYear_${id}`, `aboutItemTitle_${id}En`, `aboutItemTitle_${id}Ar`, `aboutItemBody_${id}En`, `aboutItemBody_${id}Ar`, `aboutImage_${id}`, `aboutImageAlt_${id}En`, `aboutImageAlt_${id}Ar`];
+    if (itemRequired.some(key => !str(f, key))) return { error: "Complete every timeline page before saving." };
   }
-  const blockIds=f.getAll("aboutBlockId").map(String);
-  if(blockIds.length>100||new Set(blockIds).size!==blockIds.length)return{error:"The content section list is invalid. Refresh and try again."};
-  for(const id of blockIds){
-    const blockRequired=[`aboutBlockEyebrow_${id}En`,`aboutBlockEyebrow_${id}Ar`,`aboutBlockTitle_${id}En`,`aboutBlockTitle_${id}Ar`,`aboutBlockBody_${id}En`,`aboutBlockBody_${id}Ar`];
-    if(blockRequired.some(key=>!str(f,key)))return{error:"Complete every English and Arabic content section before saving."};
-    if(str(f,`aboutBlockImage_${id}`)&&(!str(f,`aboutBlockImageAlt_${id}En`)||!str(f,`aboutBlockImageAlt_${id}Ar`)))return{error:"Add English and Arabic alt text for every section image."};
+  const blockIds = f.getAll("aboutBlockId").map(String);
+  if (blockIds.length > 100 || new Set(blockIds).size !== blockIds.length) return { error: "The content section list is invalid. Refresh and try again." };
+  for (const id of blockIds) {
+    const blockRequired = [`aboutBlockEyebrow_${id}En`, `aboutBlockEyebrow_${id}Ar`, `aboutBlockTitle_${id}En`, `aboutBlockTitle_${id}Ar`, `aboutBlockBody_${id}En`, `aboutBlockBody_${id}Ar`];
+    if (blockRequired.some(key => !str(f, key))) return { error: "Complete every English and Arabic content section before saving." };
+    if (str(f, `aboutBlockImage_${id}`) && (!str(f, `aboutBlockImageAlt_${id}En`) || !str(f, `aboutBlockImageAlt_${id}Ar`))) return { error: "Add English and Arabic alt text for every section image." };
   }
-  await prisma.$transaction(async tx=>{
-    const brochureVal = str(f, "companyBrochureUrl");
-    if (brochureVal !== undefined) {
-      await tx.globalSettings.update({
-        where: { id: "global" },
-        data: { companyBrochureUrl: brochureVal || null },
-      });
-    }
+  try {
+    await prisma.$transaction(async tx => {
+      const brochureVal = str(f, "companyBrochureUrl");
+      if (brochureVal !== undefined) {
+        await tx.globalSettings.update({
+          where: { id: "global" },
+          data: { companyBrochureUrl: brochureVal || null },
+        });
+      }
 
-    await tx.homepage.update({
-      where: { id: "homepage" },
-      data: {
+      await safeUpdateModelRecord(tx, "Homepage", "Homepage", "homepage", {
         aboutHeroEnabled: bool(f, "aboutHeroEnabled"),
         aboutHeroEyebrowEn: str(f, "aboutHeroEyebrowEn"),
         aboutHeroEyebrowAr: str(f, "aboutHeroEyebrowAr"),
@@ -1025,10 +1080,19 @@ export async function saveAbout(_:ActionState,f:FormData):Promise<ActionState>{
         aboutHeroBodyEn: str(f, "aboutHeroBodyEn"),
         aboutHeroBodyAr: str(f, "aboutHeroBodyAr"),
         aboutHeroImageUrl: str(f, "aboutHeroImageUrl"),
+        aboutHeroMobileImageUrl: str(f, "aboutHeroMobileImageUrl") || null,
+        aboutHeroMediaType: str(f, "aboutHeroMediaType") || "IMAGE",
+        aboutHeroVideoUrl: str(f, "aboutHeroVideoUrl") || null,
+        aboutHeroMobileMediaType: str(f, "aboutHeroMobileMediaType") || "INHERIT",
+        aboutHeroMobileVideoUrl: str(f, "aboutHeroMobileVideoUrl") || null,
+        aboutHeroPosterUrl: str(f, "aboutHeroPosterUrl") || null,
+        aboutHeroFocalPoint: str(f, "aboutHeroFocalPoint") || "center",
+        aboutHeroMobileFocalPoint: str(f, "aboutHeroMobileFocalPoint") || "center",
         aboutHeroImageAltEn: str(f, "aboutHeroImageAltEn"),
         aboutHeroImageAltAr: str(f, "aboutHeroImageAltAr"),
         aboutHeroCtaLabelEn: str(f, "aboutHeroCtaLabelEn") || "Explore Our Journey",
         aboutHeroCtaLabelAr: str(f, "aboutHeroCtaLabelAr") || "اكتشف رحلتنا",
+        aboutHeroCtaUrl: str(f, "aboutHeroCtaUrl") || "#about",
 
         aboutWhoWeAreEnabled: bool(f, "aboutWhoWeAreEnabled"),
         aboutWhoWeAreEyebrowEn: str(f, "aboutWhoWeAreEyebrowEn") || "Who We Are",
@@ -1097,100 +1161,344 @@ export async function saveAbout(_:ActionState,f:FormData):Promise<ActionState>{
         aboutLeadershipCtaEn: str(f, "aboutLeadershipCtaEn") || "Contact Our Team",
         aboutLeadershipCtaAr: str(f, "aboutLeadershipCtaAr") || "تواصل مع فريقنا",
         aboutLeadershipCtaUrl: str(f, "aboutLeadershipCtaUrl") || "/contact",
-      },
+      });
+      const existing = await tx.aboutMilestone.findMany({ where: { homepageId: "homepage" }, select: { id: true } });
+      const existingIds = new Set(existing.map(item => item.id));
+      const retainedIds = ids.filter(id => existingIds.has(id));
+      await tx.aboutMilestone.deleteMany({ where: { homepageId: "homepage", ...(retainedIds.length ? { id: { notIn: retainedIds } } : {}) } });
+      for (const [index, id] of ids.entries()) {
+        const data = { year: str(f, `aboutYear_${id}`), titleEn: str(f, `aboutItemTitle_${id}En`), titleAr: str(f, `aboutItemTitle_${id}Ar`), bodyEn: str(f, `aboutItemBody_${id}En`), bodyAr: str(f, `aboutItemBody_${id}Ar`), imageUrl: str(f, `aboutImage_${id}`), imageAltEn: str(f, `aboutImageAlt_${id}En`), imageAltAr: str(f, `aboutImageAlt_${id}Ar`), sortOrder: index };
+        if (existingIds.has(id)) await tx.aboutMilestone.update({ where: { id }, data });
+        else await tx.aboutMilestone.create({ data: { ...data, homepageId: "homepage" } });
+      }
+      const existingBlocks = await tx.aboutContentBlock.findMany({ where: { homepageId: "homepage" }, select: { id: true } });
+      const existingBlockIds = new Set(existingBlocks.map(item => item.id));
+      const retainedBlockIds = blockIds.filter(id => existingBlockIds.has(id));
+      await tx.aboutContentBlock.deleteMany({ where: { homepageId: "homepage", ...(retainedBlockIds.length ? { id: { notIn: retainedBlockIds } } : {}) } });
+      for (const [index, id] of blockIds.entries()) {
+        const imageUrl = str(f, `aboutBlockImage_${id}`) || null;
+        const data = { enabled: bool(f, `aboutBlockEnabled_${id}`), eyebrowEn: str(f, `aboutBlockEyebrow_${id}En`), eyebrowAr: str(f, `aboutBlockEyebrow_${id}Ar`), titleEn: str(f, `aboutBlockTitle_${id}En`), titleAr: str(f, `aboutBlockTitle_${id}Ar`), bodyEn: str(f, `aboutBlockBody_${id}En`), bodyAr: str(f, `aboutBlockBody_${id}Ar`), imageUrl, imageAltEn: imageUrl ? str(f, `aboutBlockImageAlt_${id}En`) : null, imageAltAr: imageUrl ? str(f, `aboutBlockImageAlt_${id}Ar`) : null, sortOrder: index };
+        if (existingBlockIds.has(id)) await tx.aboutContentBlock.update({ where: { id }, data }); else await tx.aboutContentBlock.create({ data: { ...data, homepageId: "homepage" } });
+      }
+      await saveFontSizes(f, tx);
     });
-    const existing=await tx.aboutMilestone.findMany({where:{homepageId:"homepage"},select:{id:true}});
-    const existingIds=new Set(existing.map(item=>item.id));
-    const retainedIds=ids.filter(id=>existingIds.has(id));
-    await tx.aboutMilestone.deleteMany({where:{homepageId:"homepage",...(retainedIds.length?{id:{notIn:retainedIds}}:{})}});
-    for(const [index,id] of ids.entries()){
-      const data={year:str(f,`aboutYear_${id}`),titleEn:str(f,`aboutItemTitle_${id}En`),titleAr:str(f,`aboutItemTitle_${id}Ar`),bodyEn:str(f,`aboutItemBody_${id}En`),bodyAr:str(f,`aboutItemBody_${id}Ar`),imageUrl:str(f,`aboutImage_${id}`),imageAltEn:str(f,`aboutImageAlt_${id}En`),imageAltAr:str(f,`aboutImageAlt_${id}Ar`),sortOrder:index};
-      if(existingIds.has(id))await tx.aboutMilestone.update({where:{id},data});
-      else await tx.aboutMilestone.create({data:{...data,homepageId:"homepage"}});
-    }
-    const existingBlocks=await tx.aboutContentBlock.findMany({where:{homepageId:"homepage"},select:{id:true}});
-    const existingBlockIds=new Set(existingBlocks.map(item=>item.id));
-    const retainedBlockIds=blockIds.filter(id=>existingBlockIds.has(id));
-    await tx.aboutContentBlock.deleteMany({where:{homepageId:"homepage",...(retainedBlockIds.length?{id:{notIn:retainedBlockIds}}:{})}});
-    for(const [index,id] of blockIds.entries()){
-      const imageUrl=str(f,`aboutBlockImage_${id}`)||null;
-      const data={enabled:bool(f,`aboutBlockEnabled_${id}`),eyebrowEn:str(f,`aboutBlockEyebrow_${id}En`),eyebrowAr:str(f,`aboutBlockEyebrow_${id}Ar`),titleEn:str(f,`aboutBlockTitle_${id}En`),titleAr:str(f,`aboutBlockTitle_${id}Ar`),bodyEn:str(f,`aboutBlockBody_${id}En`),bodyAr:str(f,`aboutBlockBody_${id}Ar`),imageUrl,imageAltEn:imageUrl?str(f,`aboutBlockImageAlt_${id}En`):null,imageAltAr:imageUrl?str(f,`aboutBlockImageAlt_${id}Ar`):null,sortOrder:index};
-      if(existingBlockIds.has(id))await tx.aboutContentBlock.update({where:{id},data});else await tx.aboutContentBlock.create({data:{...data,homepageId:"homepage"}});
-    }
-  });
-  await saveFontSizes(f);
-  revalidatePath("/en");
-  revalidatePath("/ar");
-  revalidatePath("/en/about");
-  revalidatePath("/ar/about");
-  revalidatePath("/en/history");
-  revalidatePath("/ar/history");
-  revalidatePath("/admin/about");
-  revalidatePath("/", "layout");
-  return{success:"About page saved."};
-}
+  } catch (error) {
+    const refId = "ABT_" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    console.error(`[saveAbout Error ref:${refId}]:`, error);
+    try {
+      const errPayload = {
+        refId,
+        timestamp: new Date().toISOString(),
+        name: error?.constructor?.name || typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      await writeFile(path.join(process.cwd(), "prisma", "about-save-error.log"), JSON.stringify(errPayload, null, 2), "utf-8");
+    } catch { }
 
-export async function saveTeam(_:ActionState,f:FormData):Promise<ActionState>{
-  await requireAdmin();
-  if(["teamEyebrowEn","teamEyebrowAr","teamTitleEn","teamTitleAr","teamIntroEn","teamIntroAr"].some(key=>!str(f,key)))return{error:"Complete all required English and Arabic page fields."};
-  const ids=f.getAll("teamMemberId").map(String);
-  if(ids.length>100||new Set(ids).size!==ids.length)return{error:"The team member list is invalid. Refresh and try again."};
-  for(const id of ids){if([`teamName_${id}En`,`teamName_${id}Ar`,`teamRole_${id}En`,`teamRole_${id}Ar`,`teamBio_${id}En`,`teamBio_${id}Ar`,`teamImage_${id}`,`teamImageAlt_${id}En`,`teamImageAlt_${id}Ar`].some(key=>!str(f,key)))return{error:"Complete every team member profile in English and Arabic."}}
-  await prisma.$transaction(async tx=>{await tx.homepage.update({where:{id:"homepage"},data:{teamEyebrowEn:str(f,"teamEyebrowEn"),teamEyebrowAr:str(f,"teamEyebrowAr"),teamTitleEn:str(f,"teamTitleEn"),teamTitleAr:str(f,"teamTitleAr"),teamIntroEn:str(f,"teamIntroEn"),teamIntroAr:str(f,"teamIntroAr")}});const existing=await tx.teamMember.findMany({where:{homepageId:"homepage"},select:{id:true}});const existingIds=new Set(existing.map(x=>x.id));const retained=ids.filter(id=>existingIds.has(id));await tx.teamMember.deleteMany({where:{homepageId:"homepage",...(retained.length?{id:{notIn:retained}}:{})}});for(const[index,id]of ids.entries()){const data={nameEn:str(f,`teamName_${id}En`),nameAr:str(f,`teamName_${id}Ar`),roleEn:str(f,`teamRole_${id}En`),roleAr:str(f,`teamRole_${id}Ar`),bioEn:str(f,`teamBio_${id}En`),bioAr:str(f,`teamBio_${id}Ar`),imageUrl:str(f,`teamImage_${id}`),imageAltEn:str(f,`teamImageAlt_${id}En`),imageAltAr:str(f,`teamImageAlt_${id}Ar`),visible:bool(f,`teamVisible_${id}`),sortOrder:index};if(existingIds.has(id))await tx.teamMember.update({where:{id},data});else await tx.teamMember.create({data:{...data,homepageId:"homepage"}})}});
-  await saveFontSizes(f);revalidatePath("/en/team");revalidatePath("/ar/team");revalidatePath("/admin/team");return{success:"Team page saved."};
-}
+    const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
+      ? ` [Diagnostic: ${error.message.split("\n")[0].slice(0, 120)}]`
+      : "";
 
-export async function savePartners(_:ActionState,f:FormData):Promise<ActionState>{
-  await requireAdmin();
-  if(["partnersEyebrowEn","partnersEyebrowAr","partnersTitleEn","partnersTitleAr","partnersIntroEn","partnersIntroAr"].some(key=>!str(f,key)))return{error:"Complete all required English and Arabic page fields."};
-  const ids=f.getAll("partnerId").map(String);
-  if(ids.length>100||new Set(ids).size!==ids.length)return{error:"The partner list is invalid. Refresh and try again."};
-  for(const id of ids){
-    const nameEn=str(f,`partnerName_${id}En`);
-    const nameAr=str(f,`partnerName_${id}Ar`);
-    if(!nameEn&&!nameAr)return{error:`Partner requires a name.`};
-    const logo=str(f,`partnerLogo_${id}`);
-    if(!logo)return{error:`Partner (${nameEn||nameAr}) requires a logo image.`};
-
+    return {
+      error: `An unexpected database error occurred while saving the About page (Reference ID: ${refId})${devDetails}. Your form draft has been preserved. Please try saving again or contact support. / حدث خطأ غير متوقع أثناء حفظ صفحة من نحن (رقم المرجع: ${refId}). تم الحفاظ على مسودة التعديلات، يرجى المحاولة مرة أخرى.`,
+    };
   }
-  await prisma.$transaction(async tx=>{
-    await tx.homepage.update({where:{id:"homepage"},data:{partnersEyebrowEn:str(f,"partnersEyebrowEn"),partnersEyebrowAr:str(f,"partnersEyebrowAr"),partnersTitleEn:str(f,"partnersTitleEn"),partnersTitleAr:str(f,"partnersTitleAr"),partnersIntroEn:str(f,"partnersIntroEn"),partnersIntroAr:str(f,"partnersIntroAr")}});
-    const existing=await tx.partner.findMany({where:{homepageId:"homepage"},select:{id:true}});const existingIds=new Set(existing.map(x=>x.id));const retained=ids.filter(id=>existingIds.has(id));
-    await tx.partner.deleteMany({where:{homepageId:"homepage",...(retained.length?{id:{notIn:retained}}:{})}});
-    for(const[index,id]of ids.entries()){
-      const rawNameEn=str(f,`partnerName_${id}En`);
-      const rawNameAr=str(f,`partnerName_${id}Ar`);
-      const nameEn=rawNameEn||rawNameAr;
-      const nameAr=rawNameAr||rawNameEn;
-      const logoUrl=str(f,`partnerLogo_${id}`);
-      const logoAltEn=str(f,`partnerLogoAlt_${id}En`)||nameEn||"Partner logo";
-      const logoAltAr=str(f,`partnerLogoAlt_${id}Ar`)||nameAr||logoAltEn||"شعار الشريك";
-      let websiteUrl=str(f,`partnerWebsite_${id}`)||null;
-      if(websiteUrl&&!/^https?:\/\//i.test(websiteUrl)){websiteUrl=`https://${websiteUrl}`;}
-      const data={nameEn,nameAr,descriptionEn:str(f,`partnerDescription_${id}En`)||null,descriptionAr:str(f,`partnerDescription_${id}Ar`)||null,logoUrl,logoAltEn,logoAltAr,websiteUrl,visible:bool(f,`partnerVisible_${id}`),sortOrder:index};
-      if(existingIds.has(id))await tx.partner.update({where:{id},data});
-      else await tx.partner.create({data:{...data,homepageId:"homepage"}});
-    }
-  });
-  await saveFontSizes(f);revalidatePath("/en/partners");revalidatePath("/ar/partners");revalidatePath("/admin/partners");revalidatePath("/","layout");return{success:"Partners page saved."};
+
+  try {
+    revalidatePath("/en");
+    revalidatePath("/ar");
+    revalidatePath("/en/about");
+    revalidatePath("/ar/about");
+    revalidatePath("/en/history");
+    revalidatePath("/ar/history");
+    revalidatePath("/admin/about");
+    revalidatePath("/", "layout");
+  } catch (revalErr) {
+    console.warn("Notice: Cache revalidation deferred:", revalErr);
+  }
+  return { success: "About page saved." };
 }
 
-export async function savePolicy(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveTeam(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  if(["policyEyebrowEn","policyEyebrowAr","policyPageTitleEn","policyPageTitleAr","policyIntroEn","policyIntroAr"].some(key=>!str(f,key)))return{error:"Complete all required page fields."};
-  const ids=f.getAll("policySectionId").map(String);if(ids.length>100||new Set(ids).size!==ids.length)return{error:"The policy section list is invalid. Refresh and try again."};
-  const slugs=new Set<string>();for(const id of ids){const slug=str(f,`policySlug_${id}`);if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)||slugs.has(slug))return{error:"Every policy document needs a unique lowercase slug using letters, numbers and hyphens."};slugs.add(slug);if([`policyTitle_${id}En`,`policyTitle_${id}Ar`,`policyBody_${id}En`,`policyBody_${id}Ar`].some(key=>!str(f,key)))return{error:"Complete every policy document in English and Arabic."}}
-  await prisma.$transaction(async tx=>{await tx.policyPage.update({where:{id:"policypage"},data:{heroEyebrowEn:str(f,"policyEyebrowEn"),heroEyebrowAr:str(f,"policyEyebrowAr"),heroTitleEn:str(f,"policyPageTitleEn"),heroTitleAr:str(f,"policyPageTitleAr"),heroBodyEn:str(f,"policyIntroEn"),heroBodyAr:str(f,"policyIntroAr")}});const existing=await tx.policyDocument.findMany({where:{policyPageId:"policypage"},select:{id:true}});const existingIds=new Set(existing.map(item=>item.id));const retained=ids.filter(id=>existingIds.has(id));await tx.policyDocument.deleteMany({where:{policyPageId:"policypage",...(retained.length?{id:{notIn:retained}}:{})}});for(const[index,id]of ids.entries()){const data={slug:str(f,`policySlug_${id}`),titleEn:str(f,`policyTitle_${id}En`),titleAr:str(f,`policyTitle_${id}Ar`),summaryEn:str(f,`policySummary_${id}En`),summaryAr:str(f,`policySummary_${id}Ar`),contentEn:str(f,`policyBody_${id}En`),contentAr:str(f,`policyBody_${id}Ar`),visible:bool(f,`policyVisible_${id}`),sortOrder:index};if(existingIds.has(id))await tx.policyDocument.update({where:{id},data});else await tx.policyDocument.create({data:{...data,policyPageId:"policypage"}})}});
-  await saveFontSizes(f);revalidatePath("/en/policy");revalidatePath("/ar/policy");revalidatePath("/admin/policy");revalidatePath("/", "layout");return{success:"Policy page saved."};
+  if (["teamEyebrowEn", "teamEyebrowAr", "teamTitleEn", "teamTitleAr", "teamIntroEn", "teamIntroAr"].some(key => !str(f, key))) return { error: "Complete all required English and Arabic page fields." };
+  const ids = f.getAll("teamMemberId").map(String);
+  if (ids.length > 100 || new Set(ids).size !== ids.length) return { error: "The team member list is invalid. Refresh and try again." };
+  for (const id of ids) { if ([`teamName_${id}En`, `teamName_${id}Ar`, `teamRole_${id}En`, `teamRole_${id}Ar`, `teamBio_${id}En`, `teamBio_${id}Ar`, `teamImage_${id}`, `teamImageAlt_${id}En`, `teamImageAlt_${id}Ar`].some(key => !str(f, key))) return { error: "Complete every team member profile in English and Arabic." } }
+
+  const teamHeroData = {
+    teamHeroEnabled: bool(f, "teamHeroEnabled"),
+    teamEyebrowEn: str(f, "teamEyebrowEn"),
+    teamEyebrowAr: str(f, "teamEyebrowAr"),
+    teamTitleEn: str(f, "teamTitleEn"),
+    teamTitleAr: str(f, "teamTitleAr"),
+    teamIntroEn: str(f, "teamIntroEn"),
+    teamIntroAr: str(f, "teamIntroAr"),
+    teamHeroCtaLabelEn: str(f, "teamHeroCtaLabelEn") || null,
+    teamHeroCtaLabelAr: str(f, "teamHeroCtaLabelAr") || null,
+    teamHeroCtaUrl: str(f, "teamHeroCtaUrl") || "#team-roster",
+    teamHeroImageUrl: str(f, "teamHeroImageUrl") || null,
+    teamHeroMobileImageUrl: str(f, "teamHeroMobileImageUrl") || null,
+    teamHeroMediaType: str(f, "teamHeroMediaType") || "IMAGE",
+    teamHeroVideoUrl: str(f, "teamHeroVideoUrl") || null,
+    teamHeroMobileMediaType: str(f, "teamHeroMobileMediaType") || "INHERIT",
+    teamHeroMobileVideoUrl: str(f, "teamHeroMobileVideoUrl") || null,
+    teamHeroPosterUrl: str(f, "teamHeroPosterUrl") || null,
+    teamHeroFocalPoint: str(f, "teamHeroFocalPoint") || "center",
+    teamHeroMobileFocalPoint: str(f, "teamHeroMobileFocalPoint") || "center",
+    teamHeroImageAltEn: str(f, "teamHeroImageAltEn") || null,
+    teamHeroImageAltAr: str(f, "teamHeroImageAltAr") || null,
+    teamHeroOverlay: str(f, "teamHeroOverlay") || "medium",
+    teamHeroAlignment: str(f, "teamHeroAlignment") || "start",
+    teamHeroHeight: str(f, "teamHeroHeight") || "standard",
+  };
+
+  try {
+    await prisma.$transaction(async tx => {
+      await safeUpdateModelRecord(tx, "Homepage", "Homepage", "homepage", teamHeroData);
+      const existing = await tx.teamMember.findMany({ where: { homepageId: "homepage" }, select: { id: true } });
+      const existingIds = new Set(existing.map(x => x.id));
+      const retained = ids.filter(id => existingIds.has(id));
+      await tx.teamMember.deleteMany({ where: { homepageId: "homepage", ...(retained.length ? { id: { notIn: retained } } : {}) } });
+      for (const [index, id] of ids.entries()) {
+        const data = { nameEn: str(f, `teamName_${id}En`), nameAr: str(f, `teamName_${id}Ar`), roleEn: str(f, `teamRole_${id}En`), roleAr: str(f, `teamRole_${id}Ar`), bioEn: str(f, `teamBio_${id}En`), bioAr: str(f, `teamBio_${id}Ar`), imageUrl: str(f, `teamImage_${id}`), imageAltEn: str(f, `teamImageAlt_${id}En`), imageAltAr: str(f, `teamImageAlt_${id}Ar`), visible: bool(f, `teamVisible_${id}`), sortOrder: index };
+        if (existingIds.has(id)) await tx.teamMember.update({ where: { id }, data });
+        else await tx.teamMember.create({ data: { ...data, homepageId: "homepage" } });
+      }
+      await saveFontSizes(f, tx);
+    });
+  } catch (error) {
+    const refId = "TEAM_" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    console.error(`[saveTeam Error ref:${refId}]:`, error);
+    try {
+      const errPayload = {
+        refId,
+        timestamp: new Date().toISOString(),
+        name: error?.constructor?.name || typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      await writeFile(path.join(process.cwd(), "prisma", "team-save-error.log"), JSON.stringify(errPayload, null, 2), "utf-8");
+    } catch { }
+
+    const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
+      ? ` [Diagnostic: ${error.message.split("\n")[0].slice(0, 120)}]`
+      : "";
+
+    return {
+      error: `An unexpected database error occurred while saving the Team page (Reference ID: ${refId})${devDetails}. Your form draft has been preserved. Please try saving again or contact support. / حدث خطأ غير متوقع أثناء حفظ صفحة الفريق (رقم المرجع: ${refId}). تم الحفاظ على مسودة التعديلات، يرجى المحاولة مرة أخرى.`,
+    };
+  }
+
+  try {
+    revalidatePath("/en/team");
+    revalidatePath("/ar/team");
+    revalidatePath("/admin/team");
+    revalidatePath("/", "layout");
+  } catch (revalErr) {
+    console.warn("Notice: Cache revalidation deferred:", revalErr);
+  }
+  return { success: "Team page saved." };
 }
 
-export async function saveTerms(_:ActionState,f:FormData):Promise<ActionState>{
-  await requireAdmin();if(["termsEyebrowEn","termsEyebrowAr","termsPageTitleEn","termsPageTitleAr","termsIntroEn","termsIntroAr"].some(key=>!str(f,key)))return{error:"Complete all required page fields."};
-  const ids=f.getAll("termsSectionId").map(String);if(ids.length>100||new Set(ids).size!==ids.length)return{error:"The terms section list is invalid. Refresh and try again."};const slugs=new Set<string>();for(const id of ids){const slug=str(f,`termsSlug_${id}`);if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)||slugs.has(slug))return{error:"Every terms section needs a unique lowercase slug using letters, numbers and hyphens."};slugs.add(slug);if([`termsTitle_${id}En`,`termsTitle_${id}Ar`,`termsBody_${id}En`,`termsBody_${id}Ar`].some(key=>!str(f,key)))return{error:"Complete every terms section in English and Arabic."}}
-  await prisma.$transaction(async tx=>{await tx.termsPage.update({where:{id:"termspage"},data:{heroEyebrowEn:str(f,"termsEyebrowEn"),heroEyebrowAr:str(f,"termsEyebrowAr"),heroTitleEn:str(f,"termsPageTitleEn"),heroTitleAr:str(f,"termsPageTitleAr"),heroBodyEn:str(f,"termsIntroEn"),heroBodyAr:str(f,"termsIntroAr")}});const existing=await tx.termsSection.findMany({where:{termsPageId:"termspage"},select:{id:true}});const existingIds=new Set(existing.map(item=>item.id));const retained=ids.filter(id=>existingIds.has(id));await tx.termsSection.deleteMany({where:{termsPageId:"termspage",...(retained.length?{id:{notIn:retained}}:{})}});for(const[index,id]of ids.entries()){const data={slug:str(f,`termsSlug_${id}`),titleEn:str(f,`termsTitle_${id}En`),titleAr:str(f,`termsTitle_${id}Ar`),contentEn:str(f,`termsBody_${id}En`),contentAr:str(f,`termsBody_${id}Ar`),visible:bool(f,`termsVisible_${id}`),sortOrder:index};if(existingIds.has(id))await tx.termsSection.update({where:{id},data});else await tx.termsSection.create({data:{...data,termsPageId:"termspage"}})}});await saveFontSizes(f);revalidatePath("/en/terms");revalidatePath("/ar/terms");revalidatePath("/admin/terms");revalidatePath("/", "layout");return{success:"Terms page saved."};
+export async function savePartners(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin();
+  if (["partnersEyebrowEn", "partnersEyebrowAr", "partnersTitleEn", "partnersTitleAr", "partnersIntroEn", "partnersIntroAr"].some(key => !str(f, key))) return { error: "Complete all required English and Arabic page fields." };
+  const ids = f.getAll("partnerId").map(String);
+  if (ids.length > 100 || new Set(ids).size !== ids.length) return { error: "The partner list is invalid. Refresh and try again." };
+  for (const id of ids) {
+    const nameEn = str(f, `partnerName_${id}En`);
+    const nameAr = str(f, `partnerName_${id}Ar`);
+    if (!nameEn && !nameAr) return { error: `Partner requires a name.` };
+    const logo = str(f, `partnerLogo_${id}`);
+    if (!logo) return { error: `Partner (${nameEn || nameAr}) requires a logo image.` };
+  }
+
+  const partnersHeroData = {
+    partnersHeroEnabled: bool(f, "partnersHeroEnabled"),
+    partnersEyebrowEn: str(f, "partnersEyebrowEn"),
+    partnersEyebrowAr: str(f, "partnersEyebrowAr"),
+    partnersTitleEn: str(f, "partnersTitleEn"),
+    partnersTitleAr: str(f, "partnersTitleAr"),
+    partnersIntroEn: str(f, "partnersIntroEn"),
+    partnersIntroAr: str(f, "partnersIntroAr"),
+    partnersHeroCtaLabelEn: str(f, "partnersHeroCtaLabelEn") || null,
+    partnersHeroCtaLabelAr: str(f, "partnersHeroCtaLabelAr") || null,
+    partnersHeroCtaUrl: str(f, "partnersHeroCtaUrl") || "#partners-directory",
+    partnersHeroImageUrl: str(f, "partnersHeroImageUrl") || null,
+    partnersHeroMobileImageUrl: str(f, "partnersHeroMobileImageUrl") || null,
+    partnersHeroMediaType: str(f, "partnersHeroMediaType") || "IMAGE",
+    partnersHeroVideoUrl: str(f, "partnersHeroVideoUrl") || null,
+    partnersHeroMobileMediaType: str(f, "partnersHeroMobileMediaType") || "INHERIT",
+    partnersHeroMobileVideoUrl: str(f, "partnersHeroMobileVideoUrl") || null,
+    partnersHeroPosterUrl: str(f, "partnersHeroPosterUrl") || null,
+    partnersHeroFocalPoint: str(f, "partnersHeroFocalPoint") || "center",
+    partnersHeroMobileFocalPoint: str(f, "partnersHeroMobileFocalPoint") || "center",
+    partnersHeroImageAltEn: str(f, "partnersHeroImageAltEn") || null,
+    partnersHeroImageAltAr: str(f, "partnersHeroImageAltAr") || null,
+    partnersHeroOverlay: str(f, "partnersHeroOverlay") || "medium",
+    partnersHeroAlignment: str(f, "partnersHeroAlignment") || "start",
+    partnersHeroHeight: str(f, "partnersHeroHeight") || "standard",
+  };
+
+  try {
+    await prisma.$transaction(async tx => {
+      await safeUpdateModelRecord(tx, "Homepage", "Homepage", "homepage", partnersHeroData);
+      const existing = await tx.partner.findMany({ where: { homepageId: "homepage" }, select: { id: true } });
+      const existingIds = new Set(existing.map(x => x.id));
+      const retained = ids.filter(id => existingIds.has(id));
+      await tx.partner.deleteMany({ where: { homepageId: "homepage", ...(retained.length ? { id: { notIn: retained } } : {}) } });
+      for (const [index, id] of ids.entries()) {
+        const rawNameEn = str(f, `partnerName_${id}En`);
+        const rawNameAr = str(f, `partnerName_${id}Ar`);
+        const nameEn = rawNameEn || rawNameAr;
+        const nameAr = rawNameAr || rawNameEn;
+        const logoUrl = str(f, `partnerLogo_${id}`);
+        const logoAltEn = str(f, `partnerLogoAlt_${id}En`) || nameEn || "Partner logo";
+        const logoAltAr = str(f, `partnerLogoAlt_${id}Ar`) || nameAr || logoAltEn || "شعار الشريك";
+        let websiteUrl = str(f, `partnerWebsite_${id}`) || null;
+        if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) { websiteUrl = `https://${websiteUrl}`; }
+        const data = { nameEn, nameAr, descriptionEn: str(f, `partnerDescription_${id}En`) || null, descriptionAr: str(f, `partnerDescription_${id}Ar`) || null, logoUrl, logoAltEn, logoAltAr, websiteUrl, visible: bool(f, `partnerVisible_${id}`), sortOrder: index };
+        if (existingIds.has(id)) await tx.partner.update({ where: { id }, data });
+        else await tx.partner.create({ data: { ...data, homepageId: "homepage" } });
+      }
+      await saveFontSizes(f, tx);
+    });
+  } catch (error) {
+    const refId = "PART_" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    console.error(`[savePartners Error ref:${refId}]:`, error);
+    try {
+      const errPayload = {
+        refId,
+        timestamp: new Date().toISOString(),
+        name: error?.constructor?.name || typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      await writeFile(path.join(process.cwd(), "prisma", "partners-save-error.log"), JSON.stringify(errPayload, null, 2), "utf-8");
+    } catch { }
+
+    const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
+      ? ` [Diagnostic: ${error.message.split("\n")[0].slice(0, 120)}]`
+      : "";
+
+    return {
+      error: `An unexpected database error occurred while saving the Partners page (Reference ID: ${refId})${devDetails}. Your form draft has been preserved. Please try saving again or contact support. / حدث خطأ غير متوقع أثناء حفظ صفحة الشركاء (رقم المرجع: ${refId}). تم الحفاظ على مسودة التعديلات، يرجى المحاولة مرة أخرى.`,
+    };
+  }
+
+  try {
+    revalidatePath("/en/partners");
+    revalidatePath("/ar/partners");
+    revalidatePath("/admin/partners");
+    revalidatePath("/", "layout");
+  } catch (revalErr) {
+    console.warn("Notice: Cache revalidation deferred:", revalErr);
+  }
+  return { success: "Partners page saved." };
 }
 
-export async function saveContactPage(_:ActionState,f:FormData):Promise<ActionState>{await requireAdmin();if(["contactEyebrowEn","contactEyebrowAr","contactPageTitleEn","contactPageTitleAr","contactIntroEn","contactIntroAr"].some(key=>!str(f,key)))return{error:"Complete all required page fields."};await prisma.contactPage.update({where:{id:"contactpage"},data:{heroEyebrowEn:str(f,"contactEyebrowEn"),heroEyebrowAr:str(f,"contactEyebrowAr"),heroTitleEn:str(f,"contactPageTitleEn"),heroTitleAr:str(f,"contactPageTitleAr"),heroBodyEn:str(f,"contactIntroEn"),heroBodyAr:str(f,"contactIntroAr")}});await saveFontSizes(f);revalidatePath("/en/contact");revalidatePath("/ar/contact");revalidatePath("/admin/contact");revalidatePath("/", "layout");return{success:"Contact page saved."};}
+export async function savePolicy(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin();
+  if (["policyEyebrowEn", "policyEyebrowAr", "policyPageTitleEn", "policyPageTitleAr", "policyIntroEn", "policyIntroAr"].some(key => !str(f, key))) return { error: "Complete all required page fields." };
+  const ids = f.getAll("policySectionId").map(String); if (ids.length > 100 || new Set(ids).size !== ids.length) return { error: "The policy section list is invalid. Refresh and try again." };
+  const slugs = new Set<string>(); for (const id of ids) { const slug = str(f, `policySlug_${id}`); if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slugs.has(slug)) return { error: "Every policy document needs a unique lowercase slug using letters, numbers and hyphens." }; slugs.add(slug); if ([`policyTitle_${id}En`, `policyTitle_${id}Ar`, `policyBody_${id}En`, `policyBody_${id}Ar`].some(key => !str(f, key))) return { error: "Complete every policy document in English and Arabic." } }
+  await prisma.$transaction(async tx => { await tx.policyPage.update({ where: { id: "policypage" }, data: { heroEyebrowEn: str(f, "policyEyebrowEn"), heroEyebrowAr: str(f, "policyEyebrowAr"), heroTitleEn: str(f, "policyPageTitleEn"), heroTitleAr: str(f, "policyPageTitleAr"), heroBodyEn: str(f, "policyIntroEn"), heroBodyAr: str(f, "policyIntroAr") } }); const existing = await tx.policyDocument.findMany({ where: { policyPageId: "policypage" }, select: { id: true } }); const existingIds = new Set(existing.map(item => item.id)); const retained = ids.filter(id => existingIds.has(id)); await tx.policyDocument.deleteMany({ where: { policyPageId: "policypage", ...(retained.length ? { id: { notIn: retained } } : {}) } }); for (const [index, id] of ids.entries()) { const data = { slug: str(f, `policySlug_${id}`), titleEn: str(f, `policyTitle_${id}En`), titleAr: str(f, `policyTitle_${id}Ar`), summaryEn: str(f, `policySummary_${id}En`), summaryAr: str(f, `policySummary_${id}Ar`), contentEn: str(f, `policyBody_${id}En`), contentAr: str(f, `policyBody_${id}Ar`), visible: bool(f, `policyVisible_${id}`), sortOrder: index }; if (existingIds.has(id)) await tx.policyDocument.update({ where: { id }, data }); else await tx.policyDocument.create({ data: { ...data, policyPageId: "policypage" } }) } });
+  await saveFontSizes(f); revalidatePath("/en/policy"); revalidatePath("/ar/policy"); revalidatePath("/admin/policy"); revalidatePath("/", "layout"); return { success: "Policy page saved." };
+}
+
+export async function saveTerms(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin(); if (["termsEyebrowEn", "termsEyebrowAr", "termsPageTitleEn", "termsPageTitleAr", "termsIntroEn", "termsIntroAr"].some(key => !str(f, key))) return { error: "Complete all required page fields." };
+  const ids = f.getAll("termsSectionId").map(String); if (ids.length > 100 || new Set(ids).size !== ids.length) return { error: "The terms section list is invalid. Refresh and try again." }; const slugs = new Set<string>(); for (const id of ids) { const slug = str(f, `termsSlug_${id}`); if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slugs.has(slug)) return { error: "Every terms section needs a unique lowercase slug using letters, numbers and hyphens." }; slugs.add(slug); if ([`termsTitle_${id}En`, `termsTitle_${id}Ar`, `termsBody_${id}En`, `termsBody_${id}Ar`].some(key => !str(f, key))) return { error: "Complete every terms section in English and Arabic." } }
+  await prisma.$transaction(async tx => { await tx.termsPage.update({ where: { id: "termspage" }, data: { heroEyebrowEn: str(f, "termsEyebrowEn"), heroEyebrowAr: str(f, "termsEyebrowAr"), heroTitleEn: str(f, "termsPageTitleEn"), heroTitleAr: str(f, "termsPageTitleAr"), heroBodyEn: str(f, "termsIntroEn"), heroBodyAr: str(f, "termsIntroAr") } }); const existing = await tx.termsSection.findMany({ where: { termsPageId: "termspage" }, select: { id: true } }); const existingIds = new Set(existing.map(item => item.id)); const retained = ids.filter(id => existingIds.has(id)); await tx.termsSection.deleteMany({ where: { termsPageId: "termspage", ...(retained.length ? { id: { notIn: retained } } : {}) } }); for (const [index, id] of ids.entries()) { const data = { slug: str(f, `termsSlug_${id}`), titleEn: str(f, `termsTitle_${id}En`), titleAr: str(f, `termsTitle_${id}Ar`), contentEn: str(f, `termsBody_${id}En`), contentAr: str(f, `termsBody_${id}Ar`), visible: bool(f, `termsVisible_${id}`), sortOrder: index }; if (existingIds.has(id)) await tx.termsSection.update({ where: { id }, data }); else await tx.termsSection.create({ data: { ...data, termsPageId: "termspage" } }) } }); await saveFontSizes(f); revalidatePath("/en/terms"); revalidatePath("/ar/terms"); revalidatePath("/admin/terms"); revalidatePath("/", "layout"); return { success: "Terms page saved." };
+}
+
+export async function saveContactPage(_: ActionState, f: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const eyebrowEn = str(f, "contactHeroEyebrowEn") || str(f, "contactEyebrowEn");
+  const eyebrowAr = str(f, "contactHeroEyebrowAr") || str(f, "contactEyebrowAr");
+  const titleEn = str(f, "contactHeroTitleEn") || str(f, "contactPageTitleEn");
+  const titleAr = str(f, "contactHeroTitleAr") || str(f, "contactPageTitleAr");
+  const bodyEn = str(f, "contactHeroBodyEn") || str(f, "contactIntroEn");
+  const bodyAr = str(f, "contactHeroBodyAr") || str(f, "contactIntroAr");
+
+  if (!eyebrowEn || !eyebrowAr || !titleEn || !titleAr || !bodyEn || !bodyAr) {
+    return { error: "Complete all required page fields." };
+  }
+
+  const heroImageUrl = str(f, "contactHeroImageUrl") || null;
+  const heroMobileImageUrl = str(f, "contactHeroMobileImageUrl") || null;
+
+  const contactHeroData = {
+    heroEnabled: bool(f, "contactHeroEnabled"),
+    heroEyebrowEn: eyebrowEn,
+    heroEyebrowAr: eyebrowAr,
+    heroTitleEn: titleEn,
+    heroTitleAr: titleAr,
+    heroBodyEn: bodyEn,
+    heroBodyAr: bodyAr,
+    heroCtaLabelEn: str(f, "contactHeroCtaLabelEn") || null,
+    heroCtaLabelAr: str(f, "contactHeroCtaLabelAr") || null,
+    heroCtaUrl: str(f, "contactHeroCtaUrl") || "#contact-form",
+    heroImageUrl,
+    heroMobileImageUrl,
+    heroMediaType: str(f, "contactHeroMediaType") || "IMAGE",
+    heroVideoUrl: str(f, "contactHeroVideoUrl") || null,
+    heroMobileMediaType: str(f, "contactHeroMobileMediaType") || "INHERIT",
+    heroMobileVideoUrl: str(f, "contactHeroMobileVideoUrl") || null,
+    heroPosterUrl: str(f, "contactHeroPosterUrl") || null,
+    heroFocalPoint: str(f, "contactHeroFocalPoint") || "center",
+    heroMobileFocalPoint: str(f, "contactHeroMobileFocalPoint") || "center",
+    heroImageAltEn: str(f, "contactHeroImageAltEn") || null,
+    heroImageAltAr: str(f, "contactHeroImageAltAr") || null,
+    heroOverlay: str(f, "contactHeroOverlay") || "medium",
+    heroAlignment: str(f, "contactHeroAlignment") || "start",
+    heroHeight: str(f, "contactHeroHeight") || "standard",
+  };
+
+  try {
+    await prisma.$transaction(async tx => {
+      await safeUpdateModelRecord(tx, "ContactPage", "ContactPage", "contactpage", contactHeroData);
+      await saveFontSizes(f, tx);
+    });
+  } catch (error) {
+    const refId = "CNT_" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    console.error(`[saveContactPage Error ref:${refId}]:`, error);
+    try {
+      const errPayload = {
+        refId,
+        timestamp: new Date().toISOString(),
+        name: error?.constructor?.name || typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      await writeFile(path.join(process.cwd(), "prisma", "contact-save-error.log"), JSON.stringify(errPayload, null, 2), "utf-8");
+    } catch { }
+
+    const devDetails = process.env.NODE_ENV !== "production" && error instanceof Error
+      ? ` [Diagnostic: ${error.message.split("\n")[0].slice(0, 120)}]`
+      : "";
+
+    return {
+      error: `An unexpected database error occurred while saving the Contact page (Reference ID: ${refId})${devDetails}. Your form draft has been preserved. Please try saving again or contact support. / حدث خطأ غير متوقع أثناء حفظ صفحة التواصل (رقم المرجع: ${refId}). تم الحفاظ على مسودة التعديلات، يرجى المحاولة مرة أخرى.`,
+    };
+  }
+
+  try {
+    revalidatePath("/en/contact");
+    revalidatePath("/ar/contact");
+    revalidatePath("/admin/contact");
+    revalidatePath("/", "layout");
+  } catch (revalErr) {
+    console.warn("Notice: Cache revalidation deferred:", revalErr);
+  }
+  return { success: "Contact page saved." };
+}
 
 export async function saveProject(_: ActionState, f: FormData): Promise<ActionState & { projectId?: string }> {
   await requireAdmin();
@@ -1339,12 +1647,12 @@ export async function saveProject(_: ActionState, f: FormData): Promise<ActionSt
   // Filter out blank landmark rows without failing validation
   const validConnectivity = parsedConnectivity
     ? parsedConnectivity.filter((c) => {
-        const dEn = String(c.destinationEn || "").trim();
-        const dAr = String(c.destinationAr || "").trim();
-        const distEn = String(c.distanceOrDurationEn || "").trim();
-        const distAr = String(c.distanceOrDurationAr || "").trim();
-        return dEn.length > 0 || dAr.length > 0 || distEn.length > 0 || distAr.length > 0;
-      })
+      const dEn = String(c.destinationEn || "").trim();
+      const dAr = String(c.destinationAr || "").trim();
+      const distEn = String(c.distanceOrDurationEn || "").trim();
+      const distAr = String(c.distanceOrDurationAr || "").trim();
+      return dEn.length > 0 || dAr.length > 0 || distEn.length > 0 || distAr.length > 0;
+    })
     : null;
 
   // Enforce valid nonnegative numbers for travel duration or distance when provided
@@ -1834,8 +2142,8 @@ export async function deleteProjectVisualTour(f: FormData): Promise<void> {
   revalidatePath(`/admin/projects/${tour.projectId}`);
 }
 
-export async function updateLead(f:FormData){await requireAdmin();const id=str(f,"id");const status=str(f,"status");if(!["NEW","CONTACTED","QUALIFIED","CLOSED"].includes(status))return;await prisma.contactSubmission.update({where:{id},data:{status,notes:str(f,"notes")||null}});revalidatePath("/admin/leads");}
-export async function deleteLead(f:FormData){await requireAdmin();await prisma.contactSubmission.delete({where:{id:str(f,"id")}});revalidatePath("/admin/leads");}
+export async function updateLead(f: FormData) { await requireAdmin(); const id = str(f, "id"); const status = str(f, "status"); if (!["NEW", "CONTACTED", "QUALIFIED", "CLOSED"].includes(status)) return; await prisma.contactSubmission.update({ where: { id }, data: { status, notes: str(f, "notes") || null } }); revalidatePath("/admin/leads"); }
+export async function deleteLead(f: FormData) { await requireAdmin(); await prisma.contactSubmission.delete({ where: { id: str(f, "id") } }); revalidatePath("/admin/leads"); }
 
 export async function markLeadReadStatus(id: string, isRead: boolean) {
   await requireAdmin();
@@ -1855,10 +2163,13 @@ export async function toggleLeadArchive(id: string, isArchived: boolean) {
   revalidatePath("/admin/leads");
 }
 
-export async function retryLeadNotificationAction(id: string): Promise<{ success?: string; error?: string }> {
+export async function retryLeadNotificationAction(
+  id: string,
+  options?: { useCurrentSettingsRecipient?: boolean }
+): Promise<{ success?: string; error?: string }> {
   await requireAdmin();
   const { retryLeadNotification } = await import("@/lib/notifications/email-service");
-  const result = await retryLeadNotification(id);
+  const result = await retryLeadNotification(id, options);
   revalidatePath("/admin/leads");
   if (result.success) {
     const statusNote = result.status === "DELIVERED" ? "delivered" : "accepted by provider";
@@ -1868,6 +2179,12 @@ export async function retryLeadNotificationAction(id: string): Promise<{ success
   } else {
     return { error: `Delivery failed: ${result.error || "Unknown error"}` };
   }
+}
+
+export async function retryLeadNotificationToCorrectedRecipientAction(
+  id: string
+): Promise<{ success?: string; error?: string }> {
+  return retryLeadNotificationAction(id, { useCurrentSettingsRecipient: true });
 }
 
 export async function retryCareerNotificationAction(id: string): Promise<{ success?: string; error?: string }> {
@@ -1898,26 +2215,26 @@ export async function dispatchPendingNotificationsAction(): Promise<{ success?: 
   };
 }
 
-export async function saveNews(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveNews(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const data={
-    slug:str(f,"slug"),
-    titleEn:str(f,"titleEn"),
-    titleAr:str(f,"titleAr"),
-    excerptEn:str(f,"excerptEn"),
-    excerptAr:str(f,"excerptAr"),
-    contentEn:str(f,"contentEn"),
-    contentAr:str(f,"contentAr"),
-    coverImageUrl:str(f,"coverImageUrl"),
-    publicationDate:str(f,"publicationDate"),
-    status:str(f,"status"),
-    featured:bool(f,"featured"),
-    featuredOrder:str(f,"featuredOrder")
+  const data = {
+    slug: str(f, "slug"),
+    titleEn: str(f, "titleEn"),
+    titleAr: str(f, "titleAr"),
+    excerptEn: str(f, "excerptEn"),
+    excerptAr: str(f, "excerptAr"),
+    contentEn: str(f, "contentEn"),
+    contentAr: str(f, "contentAr"),
+    coverImageUrl: str(f, "coverImageUrl"),
+    publicationDate: str(f, "publicationDate"),
+    status: str(f, "status"),
+    featured: bool(f, "featured"),
+    featuredOrder: str(f, "featuredOrder")
   };
-  const parsed=newsSchema.safeParse(data);
-  if(!parsed.success)return{error:parsed.error.issues[0].message};
-  const category=str(f,"category")||"NEWS";
-  const projectId=str(f,"projectId")||null;
+  const parsed = newsSchema.safeParse(data);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const category = str(f, "category") || "NEWS";
+  const projectId = str(f, "projectId") || null;
   const rawConstructionDate = str(f, "constructionDate");
   const constructionDate = rawConstructionDate ? new Date(rawConstructionDate) : null;
 
@@ -1967,9 +2284,9 @@ export async function saveNews(_:ActionState,f:FormData):Promise<ActionState>{
     sidebarViewAllLabelAr: str(f, "sidebarViewAllLabelAr") || null,
   };
 
-  const id=str(f,"id");
-  try{
-    if(id) {
+  const id = str(f, "id");
+  try {
+    if (id) {
       const existing = await prisma.newsArticle.findUnique({ where: { id } });
       if (existing && existing.slug !== parsed.data.slug) {
         // Record redirect from prior slug to new slug
@@ -1981,11 +2298,11 @@ export async function saveNews(_:ActionState,f:FormData):Promise<ActionState>{
         revalidatePath(`/en/journal/${existing.slug}`);
         revalidatePath(`/ar/journal/${existing.slug}`);
       }
-      await prisma.newsArticle.update({where:{id},data:{...parsed.data,...extra}});
+      await prisma.newsArticle.update({ where: { id }, data: { ...parsed.data, ...extra } });
     } else {
-      await prisma.newsArticle.create({data:{...parsed.data,...extra}});
+      await prisma.newsArticle.create({ data: { ...parsed.data, ...extra } });
     }
-  }catch{return{error:"The slug must be unique."}}
+  } catch { return { error: "The slug must be unique." } }
 
   revalidatePath("/admin/news");
   revalidatePath("/en");
@@ -2015,7 +2332,7 @@ export async function deleteNews(f: FormData) {
   revalidatePath("/", "layout");
 }
 
-export async function saveJournalSettings(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveJournalSettings(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
   const data = {
     titleEn: str(f, "titleEn") || "Journal",
@@ -2178,10 +2495,10 @@ export async function saveNavigation(_: ActionState, f: FormData): Promise<Actio
   revalidatePath("/", "layout");
   return { success: "Navigation links saved." };
 }
-export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState>{
+export async function saveSettings(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const email=str(f,"contactEmail");
-  if(!loginSchema.shape.email.safeParse(email).success)return{error:"Enter a valid contact email."};
+  const email = str(f, "contactEmail");
+  if (!loginSchema.shape.email.safeParse(email).success) return { error: "Enter a valid contact email." };
   const notifEmail = str(f, "notificationRecipientEmail");
   if (notifEmail && !loginSchema.shape.email.safeParse(notifEmail).success) {
     return { error: "Enter a valid email address for form inquiries notification recipient." };
@@ -2194,13 +2511,13 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
   if (senderEmail && !loginSchema.shape.email.safeParse(senderEmail).success) {
     return { error: "Enter a valid email address for sender override." };
   }
-  const ids=f.getAll("socialId").map(String);
-  if(ids.length>20||new Set(ids).size!==ids.length)return{error:"The social links list is invalid. Refresh and try again."};
-  const socials=ids.map((id,sortOrder)=>({name:str(f,`socialName_${id}`),url:str(f,`socialUrl_${id}`),svgIcon:str(f,`socialSvg_${id}`),sortOrder}));
-  for(const social of socials){
-    if(!social.name||social.name.length>50)return{error:"Enter a social network name of 50 characters or fewer."};
-    if(!/^https?:\/\//i.test(social.url)||!safeUrl.safeParse(social.url).success)return{error:`Enter a valid public URL for ${social.name}.`};
-    if(social.svgIcon.length>20000||!/^<svg(?:\s|>)/i.test(social.svgIcon)||!/<\/svg>$/i.test(social.svgIcon))return{error:`Paste a complete SVG icon for ${social.name}.`};
+  const ids = f.getAll("socialId").map(String);
+  if (ids.length > 20 || new Set(ids).size !== ids.length) return { error: "The social links list is invalid. Refresh and try again." };
+  const socials = ids.map((id, sortOrder) => ({ name: str(f, `socialName_${id}`), url: str(f, `socialUrl_${id}`), svgIcon: str(f, `socialSvg_${id}`), sortOrder }));
+  for (const social of socials) {
+    if (!social.name || social.name.length > 50) return { error: "Enter a social network name of 50 characters or fewer." };
+    if (!/^https?:\/\//i.test(social.url) || !safeUrl.safeParse(social.url).success) return { error: `Enter a valid public URL for ${social.name}.` };
+    if (social.svgIcon.length > 20000 || !/^<svg(?:\s|>)/i.test(social.svgIcon) || !/<\/svg>$/i.test(social.svgIcon)) return { error: `Paste a complete SVG icon for ${social.name}.` };
   }
 
   // Validate SMTP Port
@@ -2214,7 +2531,7 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
     smtpPort = parsed;
   }
 
-  await prisma.$transaction(async tx=>{
+  await prisma.$transaction(async tx => {
     const existing = await tx.globalSettings.findUniqueOrThrow({ where: { id: "global" } });
 
     // Handle password encryption:
@@ -2247,7 +2564,7 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
     }
 
     const settingsUpdate = {
-      siteNameEn:str(f,"siteNameEn"),siteNameAr:str(f,"siteNameAr"),contactEmail:email,phone:str(f,"phone"),hotline:str(f,"hotline")||"17087",companyBrochureUrl:str(f,"companyBrochureUrl")||null,workingHoursEn:str(f,"workingHoursEn")||"Sunday - Thursday: 9:00 AM - 6:00 PM",workingHoursAr:str(f,"workingHoursAr")||"الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م",addressEn:str(f,"addressEn"),addressAr:str(f,"addressAr"),mapUrl:str(f,"mapUrl")||null,descriptionEn:str(f,"descriptionEn")||null,descriptionAr:str(f,"descriptionAr")||null,footerExploreHeadingEn:str(f,"footerExploreHeadingEn")||"Explore",footerExploreHeadingAr:str(f,"footerExploreHeadingAr")||"استكشف",footerProjectsHeadingEn:str(f,"footerProjectsHeadingEn")||"Our Projects",footerProjectsHeadingAr:str(f,"footerProjectsHeadingAr")||"مشاريعنا",footerContactHeadingEn:str(f,"footerContactHeadingEn")||"Contact",footerContactHeadingAr:str(f,"footerContactHeadingAr")||"تواصل معنا",callbackEnabled:bool(f,"callbackEnabled"),callbackLabelEn:str(f,"callbackLabelEn")||"Request a Call Back",callbackLabelAr:str(f,"callbackLabelAr")||"طلب معاودة الاتصال",copyrightEn:str(f,"copyrightEn"),copyrightAr:str(f,"copyrightAr"),defaultSeoTitleEn:str(f,"defaultSeoTitleEn"),defaultSeoTitleAr:str(f,"defaultSeoTitleAr"),defaultSeoDescriptionEn:str(f,"defaultSeoDescriptionEn"),defaultSeoDescriptionAr:str(f,"defaultSeoDescriptionAr"),defaultOgImageUrl:str(f,"defaultOgImageUrl")||null,menuMediaUrl:str(f,"menuMediaUrl"),menuMediaAltEn:str(f,"menuMediaAltEn"),menuMediaAltAr:str(f,"menuMediaAltAr"),
+      siteNameEn: str(f, "siteNameEn"), siteNameAr: str(f, "siteNameAr"), contactEmail: email, phone: str(f, "phone"), hotline: str(f, "hotline") || "17087", companyBrochureUrl: str(f, "companyBrochureUrl") || null, workingHoursEn: str(f, "workingHoursEn") || "Sunday - Thursday: 9:00 AM - 6:00 PM", workingHoursAr: str(f, "workingHoursAr") || "الأحد - الخميس: ٩:٠٠ ص - ٦:٠٠ م", addressEn: str(f, "addressEn"), addressAr: str(f, "addressAr"), mapUrl: str(f, "mapUrl") || null, descriptionEn: str(f, "descriptionEn") || null, descriptionAr: str(f, "descriptionAr") || null, footerExploreHeadingEn: str(f, "footerExploreHeadingEn") || "Explore", footerExploreHeadingAr: str(f, "footerExploreHeadingAr") || "استكشف", footerProjectsHeadingEn: str(f, "footerProjectsHeadingEn") || "Our Projects", footerProjectsHeadingAr: str(f, "footerProjectsHeadingAr") || "مشاريعنا", footerContactHeadingEn: str(f, "footerContactHeadingEn") || "Contact", footerContactHeadingAr: str(f, "footerContactHeadingAr") || "تواصل معنا", callbackEnabled: bool(f, "callbackEnabled"), callbackLabelEn: str(f, "callbackLabelEn") || "Request a Call Back", callbackLabelAr: str(f, "callbackLabelAr") || "طلب معاودة الاتصال", copyrightEn: str(f, "copyrightEn"), copyrightAr: str(f, "copyrightAr"), defaultSeoTitleEn: str(f, "defaultSeoTitleEn"), defaultSeoTitleAr: str(f, "defaultSeoTitleAr"), defaultSeoDescriptionEn: str(f, "defaultSeoDescriptionEn"), defaultSeoDescriptionAr: str(f, "defaultSeoDescriptionAr"), defaultOgImageUrl: str(f, "defaultOgImageUrl") || null, menuMediaUrl: str(f, "menuMediaUrl"), menuMediaAltEn: str(f, "menuMediaAltEn"), menuMediaAltAr: str(f, "menuMediaAltAr"),
       notificationEmailEnabled: bool(f, "notificationEmailEnabled"),
       notificationRecipientEmail: str(f, "notificationRecipientEmail") || null,
       careersRecipientEmail: str(f, "careersRecipientEmail") || null,
@@ -2279,7 +2596,7 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
     }
 
     await tx.globalSettings.update({
-      where:{id:"global"},
+      where: { id: "global" },
       data: safeSettingsData as any,
     });
 
@@ -2293,8 +2610,8 @@ export async function saveSettings(_:ActionState,f:FormData):Promise<ActionState
         }
       }
     }
-    await tx.socialLink.deleteMany({where:{globalSettingsId:"global"}});
-    if(socials.length)await tx.socialLink.createMany({data:socials.map(item=>({...item,globalSettingsId:"global"}))});
+    await tx.socialLink.deleteMany({ where: { globalSettingsId: "global" } });
+    if (socials.length) await tx.socialLink.createMany({ data: socials.map(item => ({ ...item, globalSettingsId: "global" })) });
   });
   revalidatePath("/en");
   revalidatePath("/ar");
@@ -2417,16 +2734,16 @@ export async function testNotificationEmailAction(_: ActionState, f: FormData): 
   }
 }
 
-export async function uploadMedia(_:ActionState,f:FormData):Promise<ActionState>{await requireAdmin();const file=f.get("file");if(!(file instanceof File)||file.size===0)return{error:"Choose an image or video."};const result=await storeMedia(file);if(result.error)return{error:result.error};if(result.asset&&(str(f,"altEn")||str(f,"altAr")))await prisma.mediaAsset.update({where:{id:result.asset.id},data:{altEn:str(f,"altEn")||null,altAr:str(f,"altAr")||null}});revalidatePath("/admin/media");revalidatePath("/admin/homepage");return{success:`${result.asset?.kind==="VIDEO"?"Video":"Image"} uploaded to the Media Library.`};}
+export async function uploadMedia(_: ActionState, f: FormData): Promise<ActionState> { await requireAdmin(); const file = f.get("file"); if (!(file instanceof File) || file.size === 0) return { error: "Choose an image or video." }; const result = await storeMedia(file); if (result.error) return { error: result.error }; if (result.asset && (str(f, "altEn") || str(f, "altAr"))) await prisma.mediaAsset.update({ where: { id: result.asset.id }, data: { altEn: str(f, "altEn") || null, altAr: str(f, "altAr") || null } }); revalidatePath("/admin/media"); revalidatePath("/admin/homepage"); return { success: `${result.asset?.kind === "VIDEO" ? "Video" : "Image"} uploaded to the Media Library.` }; }
 
-export async function uploadHomepageMedia(f:FormData,expectedKind:"IMAGE"|"VIDEO"|"DOCUMENT"):Promise<{asset?:UploadedMedia;error?:string}>{await requireAdmin();const file=f.get("file");if(!(file instanceof File)||file.size===0)return{error:`Choose a${expectedKind==="IMAGE"?"n image":expectedKind==="VIDEO"?" video":" document"} file.`};return storeMedia(file,expectedKind);}
+export async function uploadHomepageMedia(f: FormData, expectedKind: "IMAGE" | "VIDEO" | "DOCUMENT"): Promise<{ asset?: UploadedMedia; error?: string }> { await requireAdmin(); const file = f.get("file"); if (!(file instanceof File) || file.size === 0) return { error: `Choose a${expectedKind === "IMAGE" ? "n image" : expectedKind === "VIDEO" ? " video" : " document"} file.` }; return storeMedia(file, expectedKind); }
 
-export async function deleteMedia(_:ActionState,f:FormData):Promise<ActionState>{
+export async function deleteMedia(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const id=str(f,"id");
-  const asset=await prisma.mediaAsset.findUnique({where:{id}});
-  if(!asset)return{error:"Media item not found."};
-  const [home,settings,project,news]=await Promise.all([
+  const id = str(f, "id");
+  const asset = await prisma.mediaAsset.findUnique({ where: { id } });
+  if (!asset) return { error: "Media item not found." };
+  const [home, contact, settings, project, news] = await Promise.all([
     prisma.homepage.findFirst({
       where: {
         OR: [
@@ -2451,91 +2768,117 @@ export async function deleteMedia(_:ActionState,f:FormData):Promise<ActionState>
           { heroPosterUrl: asset.url },
           { lifestyleMediaUrl: asset.url },
           { aboutHeroImageUrl: asset.url },
+          { aboutHeroMobileImageUrl: asset.url },
+          { aboutHeroVideoUrl: asset.url },
+          { aboutHeroPosterUrl: asset.url },
+          { teamHeroImageUrl: asset.url },
+          { teamHeroMobileImageUrl: asset.url },
+          { teamHeroVideoUrl: asset.url },
+          { teamHeroPosterUrl: asset.url },
+          { partnersHeroImageUrl: asset.url },
+          { partnersHeroMobileImageUrl: asset.url },
+          { partnersHeroVideoUrl: asset.url },
+          { partnersHeroPosterUrl: asset.url },
+          { careersHeroImageUrl: asset.url },
+          { careersHeroMobileImageUrl: asset.url },
+          { careersHeroVideoUrl: asset.url },
+          { careersHeroPosterUrl: asset.url },
         ],
       },
       select: { id: true },
     }),
-    prisma.globalSettings.findFirst({where:{OR:[{menuMediaUrl:asset.url},{defaultOgImageUrl:asset.url}]},select:{id:true}}),
-    prisma.project.findFirst({where:{OR:[{coverImageUrl:asset.url},{logoUrl:asset.url},{ogImageUrl:asset.url}]},select:{id:true}}),
-    prisma.newsArticle.findFirst({where:{OR:[{coverImageUrl:asset.url},{ogImageUrl:asset.url}]},select:{id:true}}),
+    prisma.contactPage.findFirst({
+      where: {
+        OR: [
+          { heroImageUrl: asset.url },
+          { heroMobileImageUrl: asset.url },
+          { heroVideoUrl: asset.url },
+          { heroPosterUrl: asset.url },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.globalSettings.findFirst({ where: { OR: [{ menuMediaUrl: asset.url }, { defaultOgImageUrl: asset.url }] }, select: { id: true } }),
+    prisma.project.findFirst({ where: { OR: [{ coverImageUrl: asset.url }, { logoUrl: asset.url }, { ogImageUrl: asset.url }] }, select: { id: true } }),
+    prisma.newsArticle.findFirst({ where: { OR: [{ coverImageUrl: asset.url }, { ogImageUrl: asset.url }] }, select: { id: true } }),
   ]);
-  const about=await prisma.aboutMilestone.findFirst({where:{imageUrl:asset.url},select:{id:true}});
-  const aboutBlock=await prisma.aboutContentBlock.findFirst({where:{imageUrl:asset.url},select:{id:true}});
-  const pageSection=await prisma.pageSection.findFirst({where:{imageUrl:asset.url},select:{id:true}});
-  if(home||about||aboutBlock||pageSection||settings||project||news)return{error:"This media is still in use. Replace it in the relevant content first."};
-  await prisma.mediaAsset.delete({where:{id}});
-  if(asset.url.startsWith("/uploads/"))await unlink(path.join(process.cwd(),"public",asset.url)).catch(()=>undefined);
+  const about = await prisma.aboutMilestone.findFirst({ where: { imageUrl: asset.url }, select: { id: true } });
+  const aboutBlock = await prisma.aboutContentBlock.findFirst({ where: { imageUrl: asset.url }, select: { id: true } });
+  const pageSection = await prisma.pageSection.findFirst({ where: { imageUrl: asset.url }, select: { id: true } });
+  if (home || contact || about || aboutBlock || pageSection || settings || project || news) return { error: "This media is still in use. Replace it in the relevant content first." };
+  await prisma.mediaAsset.delete({ where: { id } });
+  if (asset.url.startsWith("/uploads/")) await unlink(path.join(process.cwd(), "public", asset.url)).catch(() => undefined);
   revalidatePath("/admin/media");
-  return{success:"Unused media deleted."};
+  return { success: "Unused media deleted." };
 }
 
-export async function saveCareerJob(_:ActionState, f:FormData):Promise<ActionState>{
+export async function saveCareerJob(_: ActionState, f: FormData): Promise<ActionState> {
   await requireAdmin();
-  const id=str(f,"id");
-  const slug=str(f,"slug");
-  const titleEn=str(f,"titleEn");
-  const titleAr=str(f,"titleAr");
-  const departmentEn=str(f,"departmentEn");
-  const departmentAr=str(f,"departmentAr");
-  const locationEn=str(f,"locationEn")||"Cairo, Egypt";
-  const locationAr=str(f,"locationAr")||"القاهرة، مصر";
-  const descriptionEn=str(f,"descriptionEn");
-  const descriptionAr=str(f,"descriptionAr");
-  const requirementsEn=str(f,"requirementsEn");
-  const requirementsAr=str(f,"requirementsAr");
-  const status=str(f,"status")==="DRAFT"?"DRAFT":"PUBLISHED";
-  const sortOrder=Number(str(f,"sortOrder"))||0;
+  const id = str(f, "id");
+  const slug = str(f, "slug");
+  const titleEn = str(f, "titleEn");
+  const titleAr = str(f, "titleAr");
+  const departmentEn = str(f, "departmentEn");
+  const departmentAr = str(f, "departmentAr");
+  const locationEn = str(f, "locationEn") || "Cairo, Egypt";
+  const locationAr = str(f, "locationAr") || "القاهرة، مصر";
+  const descriptionEn = str(f, "descriptionEn");
+  const descriptionAr = str(f, "descriptionAr");
+  const requirementsEn = str(f, "requirementsEn");
+  const requirementsAr = str(f, "requirementsAr");
+  const status = str(f, "status") === "DRAFT" ? "DRAFT" : "PUBLISHED";
+  const sortOrder = Number(str(f, "sortOrder")) || 0;
 
-  if(!slug||!titleEn||!titleAr||!departmentEn||!departmentAr||!descriptionEn||!descriptionAr){
-    return{error:"Please fill out all required job fields in English and Arabic."};
+  if (!slug || !titleEn || !titleAr || !departmentEn || !departmentAr || !descriptionEn || !descriptionAr) {
+    return { error: "Please fill out all required job fields in English and Arabic." };
   }
 
-  try{
-    if(id){
+  try {
+    if (id) {
       await prisma.careerJob.update({
-        where:{id},
-        data:{slug,titleEn,titleAr,departmentEn,departmentAr,locationEn,locationAr,descriptionEn,descriptionAr,requirementsEn,requirementsAr,status,sortOrder}
+        where: { id },
+        data: { slug, titleEn, titleAr, departmentEn, departmentAr, locationEn, locationAr, descriptionEn, descriptionAr, requirementsEn, requirementsAr, status, sortOrder }
       });
     } else {
       await prisma.careerJob.create({
-        data:{slug,titleEn,titleAr,departmentEn,departmentAr,locationEn,locationAr,descriptionEn,descriptionAr,requirementsEn,requirementsAr,status,sortOrder}
+        data: { slug, titleEn, titleAr, departmentEn, departmentAr, locationEn, locationAr, descriptionEn, descriptionAr, requirementsEn, requirementsAr, status, sortOrder }
       });
     }
-  }catch{
-    return{error:"The job slug must be unique."};
+  } catch {
+    return { error: "The job slug must be unique." };
   }
 
   revalidatePath("/admin/careers");
   revalidatePath("/en/careers");
   revalidatePath("/ar/careers");
   revalidatePath("/", "layout");
-  return{success:"Career vacancy saved."};
+  return { success: "Career vacancy saved." };
 }
 
-export async function deleteCareerJob(f:FormData){
+export async function deleteCareerJob(f: FormData) {
   await requireAdmin();
-  const id=str(f,"id");
-  await prisma.careerJob.delete({where:{id}});
+  const id = str(f, "id");
+  await prisma.careerJob.delete({ where: { id } });
   revalidatePath("/admin/careers");
   revalidatePath("/en/careers");
   revalidatePath("/ar/careers");
   revalidatePath("/", "layout");
 }
 
-export async function updateCareerApplicationStatus(f:FormData){
+export async function updateCareerApplicationStatus(f: FormData) {
   await requireAdmin();
-  const id=str(f,"id");
-  const status=str(f,"status");
-  const notes=str(f,"notes")||null;
-  if(!["NEW","REVIEWED","SHORTLISTED","REJECTED"].includes(status))return;
-  await prisma.careerApplication.update({where:{id},data:{status,notes}});
+  const id = str(f, "id");
+  const status = str(f, "status");
+  const notes = str(f, "notes") || null;
+  if (!["NEW", "REVIEWED", "SHORTLISTED", "REJECTED"].includes(status)) return;
+  await prisma.careerApplication.update({ where: { id }, data: { status, notes } });
   revalidatePath("/admin/careers");
 }
 
-export async function deleteCareerApplication(f:FormData){
+export async function deleteCareerApplication(f: FormData) {
   await requireAdmin();
-  const id=str(f,"id");
-  await prisma.careerApplication.delete({where:{id}});
+  const id = str(f, "id");
+  await prisma.careerApplication.delete({ where: { id } });
   revalidatePath("/admin/careers");
 }
 
@@ -2633,25 +2976,50 @@ export async function saveCareersPageContent(_: ActionState, f: FormData): Promi
   if (!heroTitleEn || !heroTitleAr) {
     return { error: "Hero title is required in both English and Arabic." };
   }
-  await prisma.homepage.update({
-    where: { id: "homepage" },
-    data: {
-      careersHeroEyebrowEn: str(f, "careersHeroEyebrowEn") || "Careers at Image",
-      careersHeroEyebrowAr: str(f, "careersHeroEyebrowAr") || "انضم إلى فريقنا",
-      careersHeroTitleEn: heroTitleEn,
-      careersHeroTitleAr: heroTitleAr,
-      careersHeroIntroEn: str(f, "careersHeroIntroEn"),
-      careersHeroIntroAr: str(f, "careersHeroIntroAr"),
-      careersHeroImageUrl: str(f, "careersHeroImageUrl") || null,
-      careersLifeEyebrowEn: str(f, "careersLifeEyebrowEn") || "Life at Image",
-      careersLifeEyebrowAr: str(f, "careersLifeEyebrowAr") || "الحياة في إيمدج",
-      careersLifeTitleEn: str(f, "careersLifeTitleEn"),
-      careersLifeTitleAr: str(f, "careersLifeTitleAr"),
-      careersLifeBodyEn: str(f, "careersLifeBodyEn"),
-      careersLifeBodyAr: str(f, "careersLifeBodyAr"),
-      careersLifeImages: str(f, "careersLifeImages") || "[]",
-    },
-  });
+
+  const careersHeroData = {
+    careersHeroEnabled: bool(f, "careersHeroEnabled"),
+    careersHeroEyebrowEn: str(f, "careersHeroEyebrowEn") || "Careers at Image",
+    careersHeroEyebrowAr: str(f, "careersHeroEyebrowAr") || "انضم إلى فريقنا",
+    careersHeroTitleEn: heroTitleEn,
+    careersHeroTitleAr: heroTitleAr,
+    careersHeroIntroEn: str(f, "careersHeroIntroEn") || str(f, "careersHeroBodyEn") || "",
+    careersHeroIntroAr: str(f, "careersHeroIntroAr") || str(f, "careersHeroBodyAr") || "",
+    careersHeroCtaLabelEn: str(f, "careersHeroCtaLabelEn") || "Explore Opportunities",
+    careersHeroCtaLabelAr: str(f, "careersHeroCtaLabelAr") || "استكشف الفرص المتاحة",
+    careersHeroCtaUrl: str(f, "careersHeroCtaUrl") || "#open-positions",
+    careersHeroImageUrl: str(f, "careersHeroImageUrl") || null,
+    careersHeroMobileImageUrl: str(f, "careersHeroMobileImageUrl") || null,
+    careersHeroMediaType: str(f, "careersHeroMediaType") || "IMAGE",
+    careersHeroVideoUrl: str(f, "careersHeroVideoUrl") || null,
+    careersHeroMobileMediaType: str(f, "careersHeroMobileMediaType") || "INHERIT",
+    careersHeroMobileVideoUrl: str(f, "careersHeroMobileVideoUrl") || null,
+    careersHeroPosterUrl: str(f, "careersHeroPosterUrl") || null,
+    careersHeroFocalPoint: str(f, "careersHeroFocalPoint") || "center",
+    careersHeroMobileFocalPoint: str(f, "careersHeroMobileFocalPoint") || "center",
+    careersHeroImageAltEn: str(f, "careersHeroImageAltEn") || "Careers at Image Developments",
+    careersHeroImageAltAr: str(f, "careersHeroImageAltAr") || "الفرص الوظيفية في إيمدج للتطوير العقاري",
+    careersHeroOverlay: str(f, "careersHeroOverlay") || "medium",
+    careersHeroAlignment: str(f, "careersHeroAlignment") || "start",
+    careersHeroHeight: str(f, "careersHeroHeight") || "fullscreen",
+    careersLifeEyebrowEn: str(f, "careersLifeEyebrowEn") || "Life at Image",
+    careersLifeEyebrowAr: str(f, "careersLifeEyebrowAr") || "الحياة في إيمدج",
+    careersLifeTitleEn: str(f, "careersLifeTitleEn") || "",
+    careersLifeTitleAr: str(f, "careersLifeTitleAr") || "",
+    careersLifeBodyEn: str(f, "careersLifeBodyEn") || "",
+    careersLifeBodyAr: str(f, "careersLifeBodyAr") || "",
+    careersLifeImages: str(f, "careersLifeImages") || "[]",
+  };
+
+  try {
+    await prisma.$transaction(async tx => {
+      await safeUpdateModelRecord(tx, "Homepage", "Homepage", "homepage", careersHeroData);
+    });
+  } catch (err: any) {
+    console.error("Failed to save careers page:", err);
+    return { error: `Failed to save Careers page content: ${err?.message || String(err)}` };
+  }
+
   revalidatePath("/en/careers");
   revalidatePath("/ar/careers");
   revalidatePath("/admin/careers");

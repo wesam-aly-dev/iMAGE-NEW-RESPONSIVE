@@ -18,25 +18,29 @@ export function Field({
   placeholder?: string;
 }) {
   const isRtl = dir === "rtl" || name.endsWith("Ar");
+  const isEn = dir === "ltr" || name.endsWith("En");
+  const showLangBadge = isRtl || isEn;
   return (
     <label>
       <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span>
           {label} {required && <strong style={{ color: "#b91c1c" }}>*</strong>}
         </span>
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            color: isRtl ? "#9a613d" : "var(--forest)",
-            background: isRtl ? "rgba(242,185,133,0.2)" : "rgba(42,69,52,0.08)",
-            padding: "2px 6px",
-            borderRadius: "4px",
-          }}
-        >
-          {isRtl ? "العربية" : "EN"}
-        </span>
+        {showLangBadge && (
+          <span
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              color: isRtl ? "#9a613d" : "var(--forest)",
+              background: isRtl ? "rgba(242,185,133,0.2)" : "rgba(42,69,52,0.08)",
+              padding: "2px 6px",
+              borderRadius: "4px",
+            }}
+          >
+            {isRtl ? "العربية" : "EN"}
+          </span>
+        )}
       </span>
       <input
         name={name}
@@ -72,25 +76,29 @@ export function Textarea({
   placeholder?: string;
 }) {
   const isRtl = dir === "rtl" || name.endsWith("Ar");
+  const isEn = dir === "ltr" || name.endsWith("En");
+  const showLangBadge = isRtl || isEn;
   return (
     <label>
       <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span>
           {label} {required && <strong style={{ color: "#b91c1c" }}>*</strong>}
         </span>
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            color: isRtl ? "#9a613d" : "var(--forest)",
-            background: isRtl ? "rgba(242,185,133,0.2)" : "rgba(42,69,52,0.08)",
-            padding: "2px 6px",
-            borderRadius: "4px",
-          }}
-        >
-          {isRtl ? "العربية" : "EN"}
-        </span>
+        {showLangBadge && (
+          <span
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              color: isRtl ? "#9a613d" : "var(--forest)",
+              background: isRtl ? "rgba(242,185,133,0.2)" : "rgba(42,69,52,0.08)",
+              padding: "2px 6px",
+              borderRadius: "4px",
+            }}
+          >
+            {isRtl ? "العربية" : "EN"}
+          </span>
+        )}
       </span>
       <textarea
         name={name}

@@ -277,13 +277,13 @@ export function MediaUploadField({
             marginBottom: "10px",
           }}
         >
-          <div style={{ position: "relative", width: "100%", height: kind === "DOCUMENT" ? "90px" : "240px", background: "#111827" }}>
+          <div style={{ position: "relative", width: "100%", height: kind === "DOCUMENT" ? "80px" : "180px", background: "#f4f5f2", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {kind === "IMAGE" ? (
               <Image
                 src={currentUrl}
                 alt={altEn || label}
                 fill
-                style={{ objectFit: "cover", objectPosition: focalPoint }}
+                style={{ objectFit: "contain", objectPosition: focalPoint }}
                 sizes="(max-width: 900px) 100vw, 600px"
               />
             ) : kind === "VIDEO" ? (
@@ -297,15 +297,15 @@ export function MediaUploadField({
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", height: "100%", padding: "16px", background: "#f8fafc", color: "#1e293b" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "8px", background: "#fee2e2", display: "grid", placeItems: "center", color: "#dc2626", fontWeight: "bold" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", height: "100%", padding: "14px 16px", background: "#f8fafc", color: "#1e293b", width: "100%" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "6px", background: "#fee2e2", display: "grid", placeItems: "center", color: "#dc2626", fontWeight: "bold", fontSize: "12px" }}>
                   PDF
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <strong style={{ display: "block", fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <strong style={{ display: "block", fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={currentUrl}>
                     {currentUrl.split("/").pop()}
                   </strong>
-                  <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#2563eb", textDecoration: "underline" }}>
+                  <a href={currentUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11.5px", color: "#2563eb", textDecoration: "underline" }}>
                     Open PDF in new tab ↗
                   </a>
                 </div>
@@ -316,24 +316,29 @@ export function MediaUploadField({
           {/* Action Row */}
           <div
             style={{
-              padding: "10px 14px",
+              padding: "8px 12px",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               borderTop: "1px solid var(--line)",
               background: "#fafafa",
               fontSize: "12px",
+              flexWrap: "wrap",
+              gap: "8px",
             }}
           >
-            <span style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>
+            <span
+              style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}
+              title={currentUrl}
+            >
               {currentUrl}
             </span>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
               <button
                 type="button"
                 className="secondary"
                 onClick={() => fileInputRef.current?.click()}
-                style={{ fontSize: "11px", padding: "4px 10px" }}
+                style={{ fontSize: "11px", padding: "4px 9px", height: "28px" }}
               >
                 Replace
               </button>
@@ -341,7 +346,7 @@ export function MediaUploadField({
                 type="button"
                 className="secondary"
                 onClick={() => setIsLibraryOpen(true)}
-                style={{ fontSize: "11px", padding: "4px 10px" }}
+                style={{ fontSize: "11px", padding: "4px 9px", height: "28px" }}
               >
                 Library
               </button>
@@ -350,11 +355,12 @@ export function MediaUploadField({
                 onClick={handleRemove}
                 style={{
                   fontSize: "11px",
-                  padding: "4px 10px",
+                  padding: "4px 9px",
+                  height: "28px",
                   color: "#dc2626",
                   background: "#fef2f2",
                   border: "1px solid #fecaca",
-                  borderRadius: "4px",
+                  borderRadius: "var(--radius-xs)",
                   cursor: "pointer",
                 }}
               >

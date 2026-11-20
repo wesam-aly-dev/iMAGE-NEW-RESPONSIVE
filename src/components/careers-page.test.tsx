@@ -32,6 +32,8 @@ vi.mock("framer-motion", () => ({
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useReducedMotion: () => false,
+  useScroll: () => ({ scrollYProgress: { get: () => 0 } }),
+  useTransform: () => 0,
 }));
 
 const mockCareersContentEn: CareersPageContent = {

@@ -369,7 +369,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
   const appUrl = (
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.NODE_ENV === "production" ? "https://imagedevelopments.com" : "http://localhost:3000")
+    (process.env.NODE_ENV === "production" ? "https://image-developments.com" : "http://localhost:3000")
   ).replace(/\/+$/, "");
 
   let parsedPayload: Record<string, unknown> | null = null;
@@ -468,11 +468,16 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
     }
   } else if (result.status === "BLOCKED") {
     // Unconfigured environment
+    const auditPrefix = job.lastError?.startsWith("[Destination updated:")
+      ? job.lastError.slice(0, job.lastError.indexOf("]") + 1) + " "
+      : "";
+    const fullError = `${auditPrefix}${result.error || "Delivery blocked"}`;
+
     await prisma.notificationJob.update({
       where: { id: jobId },
       data: {
         status: "BLOCKED",
-        lastError: result.error,
+        lastError: fullError,
       },
     });
 
@@ -482,7 +487,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
           where: { id: job.targetId },
           data: {
             notificationStatus: "BLOCKED",
-            notificationError: result.error,
+            notificationError: fullError,
             notificationAttempts: { increment: 1 },
           },
         });
@@ -491,7 +496,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
           where: { id: job.targetId },
           data: {
             notificationStatus: "BLOCKED",
-            notificationError: result.error,
+            notificationError: fullError,
             notificationAttempts: { increment: 1 },
           },
         });
@@ -500,7 +505,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
             where: { referenceNumber: parsedPayload.referenceNumber },
             data: {
               notificationStatus: "BLOCKED",
-              notificationError: result.error,
+              notificationError: fullError,
               notificationAttempts: { increment: 1 },
             },
           });
@@ -513,12 +518,16 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
     const isExhausted = attempts >= job.maxAttempts;
     const backoffSeconds = Math.min(60 * Math.pow(2, attempts), 3600);
     const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000);
+    const auditPrefix = job.lastError?.startsWith("[Destination updated:")
+      ? job.lastError.slice(0, job.lastError.indexOf("]") + 1) + " "
+      : "";
+    const fullError = `${auditPrefix}${result.error || "Delivery failed"}`;
 
     await prisma.notificationJob.update({
       where: { id: jobId },
       data: {
         status: isExhausted ? "FAILED" : "PENDING",
-        lastError: result.error,
+        lastError: fullError,
         nextAttemptAt,
       },
     });
@@ -529,7 +538,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
           where: { id: job.targetId },
           data: {
             notificationStatus: isExhausted ? "FAILED" : "PENDING",
-            notificationError: result.error,
+            notificationError: fullError,
             notificationAttempts: { increment: 1 },
           },
         });
@@ -538,7 +547,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
           where: { id: job.targetId },
           data: {
             notificationStatus: isExhausted ? "FAILED" : "PENDING",
-            notificationError: result.error,
+            notificationError: fullError,
             notificationAttempts: { increment: 1 },
           },
         });
@@ -547,7 +556,7 @@ export async function dispatchNotificationJob(jobId: string): Promise<EmailDeliv
             where: { referenceNumber: parsedPayload.referenceNumber },
             data: {
               notificationStatus: isExhausted ? "FAILED" : "PENDING",
-              notificationError: result.error,
+              notificationError: fullError,
               notificationAttempts: { increment: 1 },
             },
           });
@@ -649,7 +658,10 @@ export async function sendTestNotificationEmail(recipientEmail: string): Promise
   return result;
 }
 
-export async function retryNotificationJob(jobId: string): Promise<EmailDeliveryResult> {
+export async function retryNotificationJob(
+  jobId: string,
+  options?: { useCurrentSettingsRecipient?: boolean }
+): Promise<EmailDeliveryResult> {
   const job = await prisma.notificationJob.findUnique({
     where: { id: jobId },
   });
@@ -664,13 +676,19 @@ export async function retryNotificationJob(jobId: string): Promise<EmailDelivery
 
   const settings = await getResolvedNotificationSettings();
 
-  // If recipient was previously unconfigured and now is configured in CMS, route to current configured address
-  const effectiveRecipient =
-    job.recipientEmail && job.recipientEmail !== "unconfigured@local" && job.recipientEmail.includes("@")
-      ? job.recipientEmail
-      : job.jobType === "CAREER_APPLICATION"
+  const currentConfiguredRecipient =
+    job.jobType === "CAREER_APPLICATION"
       ? settings.careersRecipientEmail || settings.recipientEmail
       : settings.recipientEmail;
+
+  const oldRecipient = job.recipientEmail;
+  const shouldReRoute =
+    options?.useCurrentSettingsRecipient ||
+    !oldRecipient ||
+    oldRecipient === "unconfigured@local" ||
+    !oldRecipient.includes("@");
+
+  const effectiveRecipient = shouldReRoute ? currentConfiguredRecipient : oldRecipient;
 
   if (!effectiveRecipient) {
     const errorMsg = "Notification recipient email address is not configured in Settings → Form Notifications";
@@ -685,6 +703,11 @@ export async function retryNotificationJob(jobId: string): Promise<EmailDelivery
     };
   }
 
+  const rerouteNote =
+    shouldReRoute && oldRecipient && oldRecipient !== effectiveRecipient
+      ? `[Destination updated: Re-routed from ${oldRecipient} to ${effectiveRecipient}]`
+      : null;
+
   // Reset job for immediate retry
   await prisma.notificationJob.update({
     where: { id: jobId },
@@ -693,14 +716,17 @@ export async function retryNotificationJob(jobId: string): Promise<EmailDelivery
       recipientEmail: effectiveRecipient,
       senderEmail: settings.senderEmail,
       nextAttemptAt: new Date(),
-      lastError: null,
+      lastError: rerouteNote,
     },
   });
 
   return dispatchNotificationJob(jobId);
 }
 
-export async function retryLeadNotification(leadId: string): Promise<EmailDeliveryResult> {
+export async function retryLeadNotification(
+  leadId: string,
+  options?: { useCurrentSettingsRecipient?: boolean }
+): Promise<EmailDeliveryResult> {
   const lead = await prisma.contactSubmission.findUnique({
     where: { id: leadId },
   });
@@ -767,10 +793,13 @@ export async function retryLeadNotification(leadId: string): Promise<EmailDelive
     });
   }
 
-  return retryNotificationJob(job.id);
+  return retryNotificationJob(job.id, options);
 }
 
-export async function retryCareerNotification(applicationId: string): Promise<EmailDeliveryResult> {
+export async function retryCareerNotification(
+  applicationId: string,
+  options?: { useCurrentSettingsRecipient?: boolean }
+): Promise<EmailDeliveryResult> {
   const app = await prisma.careerApplication.findUnique({
     where: { id: applicationId },
   });
@@ -828,5 +857,5 @@ export async function retryCareerNotification(applicationId: string): Promise<Em
     });
   }
 
-  return retryNotificationJob(job.id);
+  return retryNotificationJob(job.id, options);
 }

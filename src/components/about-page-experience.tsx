@@ -48,11 +48,16 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
   }, []);
 
   const onScrollToTimeline = () => {
-    const lenis = (window as unknown as { lenis?: { scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void } }).lenis;
-    if (lenis) {
-      lenis.scrollTo("#about", { duration: 1.2 });
+    const target = hero.ctaUrl || "#about";
+    if (target.startsWith("#")) {
+      const lenis = (window as unknown as { lenis?: { scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void } }).lenis;
+      if (lenis) {
+        lenis.scrollTo(target, { duration: 1.2 });
+      } else {
+        document.querySelector(target)?.scrollIntoView({ behavior: "smooth" });
+      }
     } else {
-      document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
+      window.location.href = target;
     }
   };
 
@@ -71,7 +76,32 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
           animate={{ scale: 1.0 }}
           transition={{ duration: animateEntrance ? 1.6 : 0, delay: animateEntrance ? 0.1 : 0, ease }}
         >
-          {hero.image && (
+          {hero.mobileImage ? (
+            <>
+              <div className="about-hero-img-desktop" aria-hidden="false">
+                <Image
+                  src={hero.image || hero.mobileImage}
+                  alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
+                  fill
+                  priority
+                  sizes="100vw"
+                  quality={90}
+                  style={{ objectFit: "cover", objectPosition: hero.focalPoint || "center" }}
+                />
+              </div>
+              <div className="about-hero-img-mobile" aria-hidden="false">
+                <Image
+                  src={hero.mobileImage}
+                  alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
+                  fill
+                  priority
+                  sizes="100vw"
+                  quality={90}
+                  style={{ objectFit: "cover", objectPosition: hero.mobileFocalPoint || hero.focalPoint || "center" }}
+                />
+              </div>
+            </>
+          ) : hero.image ? (
             <Image
               src={hero.image}
               alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
@@ -79,8 +109,9 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
               priority
               sizes="100vw"
               quality={90}
+              style={{ objectFit: "cover", objectPosition: hero.focalPoint || "center" }}
             />
-          )}
+          ) : null}
         </motion.div>
       </motion.div>
 

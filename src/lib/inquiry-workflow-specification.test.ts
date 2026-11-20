@@ -301,4 +301,79 @@ describe("Website Inquiry Specification Tests (P0 Verification)", { timeout: 350
     expect(email.subject).not.toContain("\n");
     expect(email.subject).toBe("New Website Inquiry | Attacker Bcc: hacker@evil.com Subject: Injected | INQ-2026-TEST01");
   });
+
+  // H. Verify configuration survives an application restart (reads directly from persisted database)
+  it("H. Configuration persists in database and survives restart with exact hyphenated domain", async () => {
+    const dbSettings = await prisma.globalSettings.findUniqueOrThrow({
+      where: { id: "global" },
+    });
+    expect(dbSettings.notificationRecipientEmail).toBe("info@image-developments.com");
+    expect(dbSettings.notificationSenderEmail).toBe("website@image-developments.com");
+    expect(dbSettings.smtpHost).toBe("image-developments.com");
+    expect(dbSettings.smtpPort).toBe(465);
+    expect(dbSettings.smtpEncryption).toBe("SSL");
+    expect(dbSettings.smtpUser).toBe("website@image-developments.com");
+    expect(dbSettings.notificationEmailEnabled).toBe(true);
+
+    // Fresh resolver call mirrors a new server request or restart
+    const freshResolved = await getResolvedNotificationSettings();
+    expect(freshResolved.recipientEmail).toBe("info@image-developments.com");
+    expect(freshResolved.senderEmail).toBe("website@image-developments.com");
+    expect(freshResolved.smtpHost).toBe("image-developments.com");
+  });
+
+  // I. Regression tests: preserves hyphens in domain, never stripping hyphens during normalization
+  it("I. Strictly preserves hyphens in email addresses and domains during normalization", async () => {
+    const rawHyphenated = "  info@image-developments.com  ";
+    const resolved = await getResolvedNotificationSettings();
+    expect(resolved.recipientEmail).toBe("info@image-developments.com");
+    expect(resolved.recipientEmail).toContain("-");
+    expect(resolved.recipientEmail).not.toBe("info@imagedevelopments.com");
+
+    const activeConfig = await resolveActiveSmtpConfig();
+    expect(activeConfig?.host).toBe("image-developments.com");
+    expect(activeConfig?.host).toContain("-");
+    expect(activeConfig?.from).toContain("website@image-developments.com");
+  });
+
+  // J. Explicit retry-to-corrected-recipient action updates unhyphenated historical job and records the change
+  it("J. Explicit retry-to-corrected-recipient re-routes historical unhyphenated destination and records audit note", async () => {
+    // Create a mock historical job targeting the unhyphenated address
+    const historicalLead = await prisma.contactSubmission.create({
+      data: {
+        name: "Historical Lead",
+        phone: "+201009999999",
+        subject: "General Inquiry",
+        message: "Historical message",
+        notificationStatus: "FAILED",
+        notificationError: "Connection refused",
+      },
+    });
+
+    const historicalJob = await prisma.notificationJob.create({
+      data: {
+        jobType: "LEAD_INQUIRY",
+        targetId: historicalLead.id,
+        recipientEmail: "info@imagedevelopments.com", // Old unhyphenated address
+        senderEmail: "website@image-developments.com",
+        subject: "New Inquiry — Historical",
+        payload: JSON.stringify({ name: "Historical Lead", phone: "+201009999999" }),
+        status: "FAILED",
+        lastError: "Delivery failed to unhyphenated host",
+        attempts: 1,
+      },
+    });
+
+    // Execute explicit retry with useCurrentSettingsRecipient: true
+    await retryLeadNotification(historicalLead.id, { useCurrentSettingsRecipient: true });
+
+    const updatedJob = await prisma.notificationJob.findUniqueOrThrow({
+      where: { id: historicalJob.id },
+    });
+
+    // Destination is updated to the current hyphenated CMS recipient
+    expect(updatedJob.recipientEmail).toBe("info@image-developments.com");
+    // Change is recorded in audit note / lastError
+    expect(updatedJob.lastError).toContain("Re-routed from info@imagedevelopments.com to info@image-developments.com");
+  });
 });

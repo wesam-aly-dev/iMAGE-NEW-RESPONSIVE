@@ -8,6 +8,7 @@ import {
   markLeadReadStatus,
   toggleLeadArchive,
   retryLeadNotificationAction,
+  retryLeadNotificationToCorrectedRecipientAction,
   dispatchPendingNotificationsAction,
 } from "@/app/admin/actions";
 
@@ -37,6 +38,7 @@ export interface SerializedLead {
   notificationError: string | null;
   notificationAttempts: number;
   notificationSentAt: string | null;
+  notificationRecipient?: string | null;
   isRead: boolean;
   isArchived: boolean;
   createdAt: string;
@@ -50,11 +52,12 @@ export interface ProjectOption {
 interface LeadsInboxProps {
   initialLeads: SerializedLead[];
   projects: ProjectOption[];
+  configuredRecipient?: string;
 }
 
 const STATUS_OPTIONS = ["NEW", "CONTACTED", "QUALIFIED", "CLOSED"] as const;
 
-export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
+export function LeadsInbox({ initialLeads, projects, configuredRecipient }: LeadsInboxProps) {
   const [leads, setLeads] = useState<SerializedLead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<SerializedLead | null>(null);
   const [activeTab, setActiveTab] = useState<"ALL" | "UNREAD" | "NEW" | "CONTACTED" | "QUALIFIED" | "CLOSED" | "FAILED" | "ARCHIVED">("ALL");
@@ -157,6 +160,26 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
       if (selectedLead?.id === id) {
         setSelectedLead((prev) =>
           prev ? { ...prev, notificationStatus: "DELIVERED", notificationError: null } : null
+        );
+      }
+    } else {
+      setActionFeedback({ id, message: res.error || "Retry failed", isError: true });
+    }
+  };
+
+  const handleRetryNotificationToCorrectedRecipient = async (id: string) => {
+    setActionFeedback({ id, message: "Re-routing and retrying to current recipient..." });
+    const res = await retryLeadNotificationToCorrectedRecipientAction(id);
+    if (res.success) {
+      setActionFeedback({ id, message: res.success, isError: false });
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === id ? { ...l, notificationStatus: "DELIVERED", notificationError: null, notificationRecipient: configuredRecipient } : l
+        )
+      );
+      if (selectedLead?.id === id) {
+        setSelectedLead((prev) =>
+          prev ? { ...prev, notificationStatus: "DELIVERED", notificationError: null, notificationRecipient: configuredRecipient } : null
         );
       }
     } else {
@@ -276,6 +299,22 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
 
   return (
     <div className="leads-inbox-container">
+      {/* Printable Report Header (Visible only when printed/saved as PDF) */}
+      <div className="print-only-header" style={{ display: "none" }} aria-hidden="true">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <span style={{ fontSize: "10pt", textTransform: "uppercase", letterSpacing: "0.1em", color: "#666" }}>Image Developments</span>
+            <h1 style={{ margin: "2pt 0 4pt", fontSize: "16pt" }}>Leads &amp; Inquiries Report</h1>
+            <p style={{ margin: 0, fontSize: "9pt", color: "#444" }}>
+              Export scope: {activeTab} &middot; Total records: {filteredLeads.length}
+            </p>
+          </div>
+          <div style={{ textAlign: "right", fontSize: "9pt", color: "#666" }}>
+            Printed: {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </div>
+        </div>
+      </div>
+
       {/* Metric Cards Row */}
       <div
         style={{
@@ -285,22 +324,22 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
           marginBottom: "20px",
         }}
       >
-        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "8px", border: "1px solid var(--line, #dfe4dc)" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600 }}>Total Inquiries</div>
+        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "var(--radius-md)", border: "1px solid var(--line, #dfe4dc)", boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Total Inquiries</div>
           <div style={{ fontSize: "24px", fontWeight: 700, color: "var(--ink, #162c20)", marginTop: "4px" }}>{leads.length}</div>
         </div>
-        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "8px", border: "1px solid var(--line, #dfe4dc)" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600 }}>Unread</div>
-          <div style={{ fontSize: "24px", fontWeight: 700, color: unreadCount > 0 ? "#b36f55" : "var(--ink, #162c20)", marginTop: "4px" }}>
+        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "var(--radius-md)", border: "1px solid var(--line, #dfe4dc)", boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Unread</div>
+          <div style={{ fontSize: "24px", fontWeight: 700, color: unreadCount > 0 ? "var(--peach-dark, #d9965a)" : "var(--ink, #162c20)", marginTop: "4px" }}>
             {unreadCount}
           </div>
         </div>
-        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "8px", border: "1px solid var(--line, #dfe4dc)" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600 }}>New Status</div>
-          <div style={{ fontSize: "24px", fontWeight: 700, color: "#2a4534", marginTop: "4px" }}>{newCount}</div>
+        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "var(--radius-md)", border: "1px solid var(--line, #dfe4dc)", boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>New Status</div>
+          <div style={{ fontSize: "24px", fontWeight: 700, color: "var(--forest, #233d2c)", marginTop: "4px" }}>{newCount}</div>
         </div>
-        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "8px", border: "1px solid var(--line, #dfe4dc)" }}>
-          <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600 }}>Notification Issues</div>
+        <div style={{ backgroundColor: "#ffffff", padding: "14px 18px", borderRadius: "var(--radius-md)", border: "1px solid var(--line, #dfe4dc)", boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted, #5e6b63)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Notification Issues</div>
           <div style={{ fontSize: "24px", fontWeight: 700, color: failedCount > 0 ? "#b91c1c" : "var(--ink, #162c20)", marginTop: "4px" }}>
             {failedCount}
           </div>
@@ -336,12 +375,13 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               padding: "8px 14px",
               background: "none",
               border: "none",
-              borderBottom: activeTab === tab.key ? "2px solid #2a4534" : "2px solid transparent",
-              color: activeTab === tab.key ? "#2a4534" : "var(--muted, #5e6b63)",
+              borderBottom: activeTab === tab.key ? "2px solid var(--forest, #233d2c)" : "2px solid transparent",
+              color: activeTab === tab.key ? "var(--forest, #233d2c)" : "var(--muted, #5e6b63)",
               fontWeight: activeTab === tab.key ? 700 : 500,
               fontSize: "13px",
               cursor: "pointer",
               whiteSpace: "nowrap",
+              transition: "all 0.16s ease",
             }}
           >
             {tab.label}
@@ -349,15 +389,21 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
         ))}
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Filter, Search, and Operational Toolbar */}
       <div
+        className="leads-toolbar"
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: "10px",
+          gap: "12px",
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: "16px",
+          padding: "12px 14px",
+          background: "#ffffff",
+          border: "1px solid var(--line, #dfe4dc)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", flex: "1 1 500px" }}>
@@ -371,7 +417,8 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               padding: "7px 12px",
               fontSize: "13px",
               border: "1px solid var(--line, #dfe4dc)",
-              borderRadius: "6px",
+              borderRadius: "var(--radius-sm)",
+              height: "36px",
             }}
           />
 
@@ -382,8 +429,9 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               padding: "7px 10px",
               fontSize: "13px",
               border: "1px solid var(--line, #dfe4dc)",
-              borderRadius: "6px",
+              borderRadius: "var(--radius-sm)",
               background: "#ffffff",
+              height: "36px",
             }}
           >
             <option value="ALL">All Projects</option>
@@ -401,8 +449,9 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
               padding: "7px 10px",
               fontSize: "13px",
               border: "1px solid var(--line, #dfe4dc)",
-              borderRadius: "6px",
+              borderRadius: "var(--radius-sm)",
               background: "#ffffff",
+              height: "36px",
             }}
           >
             <option value="ALL">All Form Types</option>
@@ -415,29 +464,41 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
           </select>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        {/* Toolbar Actions: Export (View/Data) and Process Outbox (Operational separated) */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <LeadExport leads={exportData} />
+
+          <div style={{ width: "1px", height: "24px", background: "var(--line, #dfe4dc)" }} aria-hidden="true" />
+
+          {/* Operational Outbox Action (Visually Distinct) */}
           <button
             type="button"
             onClick={handleProcessOutbox}
             disabled={isPending}
+            title="Dispatch queued email notifications"
             style={{
               padding: "7px 14px",
-              fontSize: "12px",
+              fontSize: "12.5px",
               fontWeight: 600,
-              backgroundColor: "#2a4534",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "6px",
+              backgroundColor: "transparent",
+              color: "var(--forest, #233d2c)",
+              border: "1px solid rgba(35, 61, 44, 0.3)",
+              borderRadius: "var(--radius-sm)",
               cursor: isPending ? "not-allowed" : "pointer",
               opacity: isPending ? 0.7 : 1,
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
+              height: "34px",
+              transition: "all 0.16s ease",
             }}
           >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+              <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+            </svg>
             <span>Process Outbox</span>
           </button>
-          <LeadExport leads={exportData} />
         </div>
       </div>
 
@@ -482,25 +543,40 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                   style={{
                     borderBottom: "1px solid var(--line-subtle, #edf1ea)",
                     backgroundColor: isUnread ? "#fdfbf7" : "transparent",
+                    borderLeft: isUnread ? "3px solid #d9965a" : "3px solid transparent",
                     fontWeight: isUnread ? 500 : 400,
                   }}
                 >
-                  {/* Read / Unread Indicator Dot */}
-                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                  {/* Read / Unread Accessible Indicator */}
+                  <td style={{ padding: "10px 12px", textAlign: "center", verticalAlign: "middle" }}>
                     <button
                       type="button"
                       title={lead.isRead ? "Mark as unread" : "Mark as read"}
                       onClick={() => handleToggleRead(lead.id, lead.isRead)}
+                      aria-label={lead.isRead ? "Read lead (click to mark unread)" : "Unread lead (click to mark read)"}
                       style={{
-                        width: "10px",
-                        height: "10px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "20px",
+                        height: "20px",
                         borderRadius: "50%",
-                        border: "none",
-                        backgroundColor: lead.isRead ? "#d1d5db" : "#b36f55",
+                        border: lead.isRead ? "1px solid #d1d5db" : "1px solid #d9965a",
+                        backgroundColor: lead.isRead ? "#f3f4f6" : "rgba(242, 185, 133, 0.25)",
+                        color: lead.isRead ? "#9ca3af" : "#9a613d",
                         cursor: "pointer",
                         padding: 0,
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        transition: "all 0.16s ease",
                       }}
-                    />
+                    >
+                      {lead.isRead ? (
+                        <span aria-hidden="true">&check;</span>
+                      ) : (
+                        <span aria-hidden="true" style={{ fontSize: "14px", lineHeight: 1 }}>&bull;</span>
+                      )}
+                    </button>
                   </td>
 
                   {/* Ref & Date */}
@@ -907,6 +983,12 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                 </span>
                 {getNotificationBadge(selectedLead.notificationStatus, selectedLead.notificationError)}
               </div>
+
+              {/* Show actual queued destination */}
+              <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)", marginBottom: "6px" }}>
+                Actual Destination: <strong style={{ fontFamily: "monospace", color: "#1f2937" }}>{selectedLead.notificationRecipient || configuredRecipient || "info@image-developments.com"}</strong>
+              </div>
+
               {selectedLead.notificationSentAt && (
                 <div style={{ fontSize: "12px", color: "var(--muted, #5e6b63)" }}>
                   Delivered at: {new Date(selectedLead.notificationSentAt).toLocaleString("en-GB")}
@@ -917,7 +999,7 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                   <strong>Error:</strong> {selectedLead.notificationError}
                 </div>
               )}
-              <div style={{ marginTop: "10px" }}>
+              <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <button
                   type="button"
                   onClick={() => handleRetryNotification(selectedLead.id)}
@@ -932,8 +1014,26 @@ export function LeadsInbox({ initialLeads, projects }: LeadsInboxProps) {
                     cursor: "pointer",
                   }}
                 >
-                  Retry Email Notification Dispatch →
+                  Retry Dispatch ({selectedLead.notificationRecipient || configuredRecipient || "info@image-developments.com"}) →
                 </button>
+                {configuredRecipient && selectedLead.notificationRecipient && selectedLead.notificationRecipient !== configuredRecipient && (
+                  <button
+                    type="button"
+                    onClick={() => handleRetryNotificationToCorrectedRecipient(selectedLead.id)}
+                    style={{
+                      padding: "6px 14px",
+                      backgroundColor: "#b36f55",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Retry to Corrected Recipient ({configuredRecipient}) →
+                  </button>
+                )}
               </div>
             </div>
 

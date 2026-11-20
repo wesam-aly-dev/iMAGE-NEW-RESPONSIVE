@@ -7,6 +7,7 @@ import type { CareersPageContent, CareerJobItem } from "@/content/home";
 import { SiteHeader } from "./site-header";
 import { Footer } from "./homepage-experience";
 import { SmoothScroll } from "./smooth-scroll";
+import { PageHero } from "./page-hero";
 import { submitCareerApplication, type CareerApplicationState } from "@/app/actions";
 
 export function CareersPageExperience({ copy }: { copy: CareersPageContent }) {
@@ -133,46 +134,42 @@ export function CareersPageExperience({ copy }: { copy: CareersPageContent }) {
       <SiteHeader copy={copy} page="careers" />
 
       <main className="careers-page" dir={ar ? "rtl" : "ltr"}>
-        {/* A. Hero Section */}
-        <header className="careers-hero stage-pad">
-          <nav className="careers-breadcrumb" aria-label="Breadcrumb">
-            <Link href={homeHref}>{ar ? "الرئيسية" : "Home"}</Link>
-            <span aria-hidden="true">/</span>
-            <strong>{ar ? "الوظائف" : "Careers"}</strong>
-          </nav>
-
-          <div className="careers-hero-grid">
-            <div className="careers-hero-text">
-              <span className="careers-hero-eyebrow">{page.hero.eyebrow}</span>
-              <h1>{page.hero.title}</h1>
-              <p className="careers-hero-intro">{page.hero.intro}</p>
-              <button
-                type="button"
-                className="btn-careers-scroll"
-                onClick={handleScrollToVacancies}
-                aria-label={ar ? "استكشف الفرص المتاحة" : "Explore Opportunities"}
-              >
-                <span>{ar ? "استكشف الفرص المتاحة" : "Explore Opportunities"}</span>
-                <b aria-hidden="true">↓</b>
-              </button>
-            </div>
-
-            <div className="careers-hero-media">
-              <Image
-                src={page.hero.image}
-                alt={page.hero.title}
-                fill
-                priority
-                sizes="(max-width: 900px) 100vw, 45vw"
-                quality={90}
-                className="careers-hero-img"
-              />
-            </div>
-          </div>
-        </header>
+        {/* A. Hero Section — Full Viewport Cinematic Architecture matching About & Homepage */}
+        <PageHero
+          locale={copy.locale}
+          hero={{
+            ...page.hero,
+            body: page.hero?.body || page.hero?.intro,
+            ctaLabel: page.hero?.ctaLabel || (ar ? "استكشف الفرص المتاحة" : "Explore Opportunities"),
+            ctaUrl: page.hero?.ctaUrl || "#open-positions",
+          }}
+          breadcrumbLabel={ar ? "الوظائف" : "Careers"}
+          indexNumber="01"
+          id="top"
+          scrollTargetId="#open-positions"
+          secondaryCta={{
+            label: ar ? "الحياة في إيمدج" : "Life at Image",
+            href: "#life-at-image",
+          }}
+          quickBadges={[
+            {
+              label: ar ? "الوظائف الشاغرة" : "Open Positions",
+              value: String(page.jobs.length).padStart(2, "0"),
+              href: "#open-positions",
+            },
+            {
+              label: ar ? "بيئة العمل" : "Culture",
+              value: ar ? "شغف وابتكار" : "Craft & Innovation",
+            },
+            {
+              label: ar ? "المقر" : "Location",
+              value: ar ? "القاهرة، مصر" : "Cairo, Egypt",
+            },
+          ]}
+        />
 
         {/* B. Life at Image */}
-        <section className="life-at-image-section stage-pad">
+        <section id="life-at-image" className="life-at-image-section stage-pad">
           <div className="section-header">
             <span className="section-eyebrow">{page.lifeAtImage.eyebrow}</span>
             <h2>{page.lifeAtImage.title}</h2>

@@ -52,7 +52,7 @@ export default async function Settings() {
           <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px", marginBottom: "16px" }}>
             Configure destination mailboxes, company sender identity, and authenticated SMTP server connection.
           </p>
-          <div className="checkbox-row">
+          <div className="checkbox-row" style={{ marginBottom: "24px" }}>
             <input
               type="checkbox"
               id="notificationEmailEnabled"
@@ -63,93 +63,122 @@ export default async function Settings() {
               Enable automated email notifications for incoming website form submissions
             </label>
           </div>
-          <Field
-            name="notificationRecipientEmail"
-            label="Inquiries recipient email / بريد استلام استفسارات العملاء (default: info@image-developments.com)"
-            type="email"
-            value={s.notificationRecipientEmail || "info@image-developments.com"}
-          />
-          <Field
-            name="additionalRecipients"
-            label="Additional recipient emails (comma-separated, optional)"
-            value={s.additionalRecipients || ""}
-          />
-          <Field
-            name="careersRecipientEmail"
-            label="Careers recipient email / بريد استلام طلبات التوظيف (leave empty to reuse inquiries recipient)"
-            type="email"
-            value={s.careersRecipientEmail || ""}
-          />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+
+          {/* Group A: Receiving Mailbox */}
+          <div style={{ borderTop: "1px solid var(--line, #dfe4dc)", paddingTop: "18px", marginBottom: "24px" }}>
+            <div style={{ marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "14.5px", fontWeight: 700, margin: "0 0 4px", color: "var(--foreground)" }}>
+                Group A: Receiving Mailbox / صناديق بريد الاستلام
+              </h3>
+              <p style={{ fontSize: "12.5px", color: "var(--muted, #6b7280)", margin: 0, lineHeight: 1.5 }}>
+                <strong>Role: Recipient.</strong> The primary company mailbox (<code>info@image-developments.com</code>) where incoming customer inquiries, callback requests, and lead notifications are delivered.
+              </p>
+            </div>
             <Field
-              name="notificationSenderName"
-              label="Sender display name (e.g. Image Developments)"
-              value={s.notificationSenderName || "Image Developments"}
-            />
-            <Field
-              name="notificationSenderEmail"
-              label="Sender email (From header, e.g. website@image-developments.com)"
+              name="notificationRecipientEmail"
+              label="Inquiries primary recipient email (default: info@image-developments.com)"
               type="email"
-              value={s.notificationSenderEmail || "website@image-developments.com"}
+              value={s.notificationRecipientEmail || "info@image-developments.com"}
+            />
+            <Field
+              name="additionalRecipients"
+              label="Additional recipient emails (comma-separated, optional)"
+              value={s.additionalRecipients || ""}
+            />
+            <Field
+              name="careersRecipientEmail"
+              label="Careers recipient email / بريد استلام طلبات التوظيف (leave empty to reuse inquiries recipient)"
+              type="email"
+              value={s.careersRecipientEmail || ""}
             />
           </div>
 
-          <h3 style={{ fontSize: "14px", fontWeight: 600, margin: "20px 0 8px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
-            SMTP Mail Server Settings / إعدادات خادم البريد (SMTP)
-          </h3>
-          <p style={{ color: "var(--muted, #6b7280)", fontSize: "13px", marginTop: "0", marginBottom: "14px" }}>
-            Choose whether to deliver notifications via CMS-managed credentials or server environment variables.
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-            <div className="field">
-              <label htmlFor="smtpActiveSource">Credentials Source</label>
-              <select id="smtpActiveSource" name="smtpActiveSource" defaultValue={s.smtpActiveSource || "ENV"}>
-                <option value="CMS">CMS Managed SMTP (Configured below)</option>
-                <option value="ENV">Server Environment Variables (SMTP_HOST / RESEND_API_KEY)</option>
-              </select>
+          {/* Group B: Sending Identity */}
+          <div style={{ borderTop: "1px solid var(--line, #dfe4dc)", paddingTop: "18px", marginBottom: "24px" }}>
+            <div style={{ marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "14.5px", fontWeight: 700, margin: "0 0 4px", color: "var(--foreground)" }}>
+                Group B: Sending Identity / هوية البريد المرسل
+              </h3>
+              <p style={{ fontSize: "12.5px", color: "var(--muted, #6b7280)", margin: 0, lineHeight: 1.5 }}>
+                <strong>Role: Sender.</strong> Authenticated company mailbox (<code>website@image-developments.com</code>) used in the <code>From:</code> header. Customer email addresses are <em>never</em> used as the sender. If a visitor provides an optional email, it is set strictly as <code>Reply-To:</code> so your team can reply directly to the customer.
+              </p>
             </div>
-            <div className="field">
-              <label htmlFor="smtpEncryption">Security Protocol</label>
-              <select id="smtpEncryption" name="smtpEncryption" defaultValue={s.smtpEncryption || "SSL"}>
-                <option value="SSL">SSL / Implicit TLS (Port 465 - Recommended)</option>
-                <option value="STARTTLS">STARTTLS (Port 587)</option>
-                <option value="NONE">Plain / None (Port 25)</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px" }}>
-            <Field
-              name="smtpHost"
-              label="SMTP Host (e.g. image-developments.com)"
-              value={s.smtpHost || "image-developments.com"}
-            />
-            <Field
-              name="smtpPort"
-              label="SMTP Port (465 for SSL, 587 for STARTTLS)"
-              type="number"
-              value={String(s.smtpPort || 465)}
-            />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <Field
-              name="smtpUser"
-              label="SMTP Username (e.g. website@image-developments.com)"
-              value={s.smtpUser || "website@image-developments.com"}
-            />
-            <div className="field">
-              <label htmlFor="smtpPassword">
-                SMTP Password {Boolean(s.smtpPasswordEncrypted) && <span style={{ color: "#166534", fontWeight: 400 }}>(Password is securely saved)</span>}
-              </label>
-              <input
-                id="smtpPassword"
-                name="smtpPassword"
-                type="password"
-                autoComplete="new-password"
-                placeholder={s.smtpPasswordEncrypted ? "•••••••••••• (Leave blank to keep existing password)" : "Enter SMTP password"}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <Field
+                name="notificationSenderName"
+                label="Sender display name (e.g. Image Developments)"
+                value={s.notificationSenderName || "Image Developments"}
               />
+              <Field
+                name="notificationSenderEmail"
+                label="Sender email (From header, e.g. website@image-developments.com)"
+                type="email"
+                value={s.notificationSenderEmail || "website@image-developments.com"}
+              />
+            </div>
+          </div>
+
+          {/* Group C: SMTP Connection */}
+          <div style={{ borderTop: "1px solid var(--line, #dfe4dc)", paddingTop: "18px" }}>
+            <div style={{ marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "14.5px", fontWeight: 700, margin: "0 0 4px", color: "var(--foreground)" }}>
+                Group C: Authenticated SMTP Server Connection / اتصال خادم البريد (SMTP)
+              </h3>
+              <p style={{ fontSize: "12.5px", color: "var(--muted, #6b7280)", margin: 0, lineHeight: 1.5 }}>
+                <strong>Role: Mail transport.</strong> Authenticated credentials and TLS connection used to send notifications through your hosting provider's mail server. Strict TLS certificate verification is enforced.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <div className="field">
+                <label htmlFor="smtpActiveSource">Credentials Source</label>
+                <select id="smtpActiveSource" name="smtpActiveSource" defaultValue={s.smtpActiveSource || "CMS"}>
+                  <option value="CMS">CMS Managed SMTP (Configured below)</option>
+                  <option value="ENV">Server Environment Variables (SMTP_HOST / RESEND_API_KEY)</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="smtpEncryption">Security Protocol</label>
+                <select id="smtpEncryption" name="smtpEncryption" defaultValue={s.smtpEncryption || "SSL"}>
+                  <option value="SSL">SSL / Implicit TLS (Port 465 - Recommended)</option>
+                  <option value="STARTTLS">STARTTLS (Port 587)</option>
+                  <option value="NONE">Plain / None (Port 25)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px" }}>
+              <Field
+                name="smtpHost"
+                label="SMTP Host (e.g. image-developments.com)"
+                value={s.smtpHost || "image-developments.com"}
+              />
+              <Field
+                name="smtpPort"
+                label="SMTP Port (465 for SSL/TLS, 587 for STARTTLS)"
+                type="number"
+                value={String(s.smtpPort || 465)}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <Field
+                name="smtpUser"
+                label="SMTP Username (e.g. website@image-developments.com)"
+                value={s.smtpUser || "website@image-developments.com"}
+              />
+              <div className="field">
+                <label htmlFor="smtpPassword">
+                  SMTP Password {Boolean(s.smtpPasswordEncrypted) && <span style={{ color: "#166534", fontWeight: 400 }}>(Password is securely saved)</span>}
+                </label>
+                <input
+                  id="smtpPassword"
+                  name="smtpPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={s.smtpPasswordEncrypted ? "•••••••••••• (Leave blank to keep existing password)" : "Enter SMTP password"}
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -221,11 +250,71 @@ export default async function Settings() {
         </section>
       </ActionForm>
 
+      {/* Group D: Testing and Status */}
       <section className="panel" style={{ marginTop: "32px" }}>
-        <h2>Test Email Connectivity / اختبار اتصال خادم البريد</h2>
-        <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px" }}>
-          Verify that outgoing notification emails reach the designated recipient inbox.
+        <h2>Group D: Testing &amp; Status / الحالة واختبار الاتصال</h2>
+        <p style={{ color: "var(--muted, #6b7280)", fontSize: "14px", marginTop: "-6px", marginBottom: "16px" }}>
+          Effective settings summary, live SMTP connection test, and test email delivery verification.
         </p>
+
+        {/* Safe Effective-Settings Summary */}
+        <div
+          style={{
+            backgroundColor: "#f9fafb",
+            border: "1px solid var(--line, #dfe4dc)",
+            borderRadius: "8px",
+            padding: "16px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#2a4534" }}>
+              Effective Settings Summary / ملخص الإعدادات الفعالة
+            </span>
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: "12px",
+                backgroundColor: notificationMeta.enabled ? "#dcfce7" : "#fee2e2",
+                color: notificationMeta.enabled ? "#15803d" : "#991b1b",
+              }}
+            >
+              {notificationMeta.enabled ? "● Notifications Enabled" : "○ Notifications Disabled"}
+            </span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px", fontSize: "12px" }}>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>Primary Recipient (To):</span>
+              <strong style={{ color: "#1f2937", fontFamily: "monospace" }}>{notificationMeta.recipientEmail || "info@image-developments.com"}</strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>From Address:</span>
+              <strong style={{ color: "#1f2937", fontFamily: "monospace" }}>{notificationMeta.senderEmail}</strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>SMTP Hostname:</span>
+              <strong style={{ color: "#1f2937", fontFamily: "monospace" }}>{notificationMeta.smtpHost || "image-developments.com"}</strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>Port &amp; Security:</span>
+              <strong style={{ color: "#1f2937" }}>{notificationMeta.smtpPort} ({notificationMeta.smtpEncryption})</strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>Credentials Source:</span>
+              <strong style={{ color: "#1f2937" }}>{notificationMeta.smtpSource === "CMS" ? "CMS Managed SMTP" : "Server Environment"}</strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted, #6b7280)", display: "block" }}>Password Configured:</span>
+              <strong style={{ color: notificationMeta.hasSmtpPassword ? "#166534" : "#991b1b" }}>
+                {notificationMeta.hasSmtpPassword ? "Yes (Securely encrypted in database)" : "No"}
+              </strong>
+            </div>
+          </div>
+        </div>
+
         <NotificationTestForm
           defaultEmail={s.notificationRecipientEmail || "info@image-developments.com"}
           savedRecipient={s.notificationRecipientEmail || "info@image-developments.com"}

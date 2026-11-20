@@ -105,11 +105,20 @@ model Homepage {
   aboutHeroTitleAr       String              @default("نصنع أماكن تتمحور حول الحياة التي تحتضنها.")
   aboutHeroBodyEn        String              @default("Image Developments creates considered communities where architecture, landscape and everyday experience belong together.")
   aboutHeroBodyAr        String              @default("تصنع إيمدج للتطوير العقاري مجتمعات مدروسة تتكامل فيها العمارة والطبيعة وتجربة الحياة اليومية.")
-  aboutHeroImageUrl      String?
-  aboutHeroImageAltEn    String              @default("Image Developments community")
-  aboutHeroImageAltAr    String              @default("أحد مجتمعات إيمدج للتطوير العقاري")
-  aboutHeroCtaLabelEn    String?             @default("Explore Our Journey")
-  aboutHeroCtaLabelAr    String?             @default("اكتشف رحلتنا")
+  aboutHeroImageUrl          String?
+  aboutHeroMobileImageUrl    String?
+  aboutHeroMediaType         String              @default("IMAGE")
+  aboutHeroVideoUrl          String?
+  aboutHeroMobileMediaType   String              @default("INHERIT")
+  aboutHeroMobileVideoUrl    String?
+  aboutHeroPosterUrl         String?
+  aboutHeroFocalPoint        String              @default("center")
+  aboutHeroMobileFocalPoint  String              @default("center")
+  aboutHeroImageAltEn        String              @default("Image Developments community")
+  aboutHeroImageAltAr        String              @default("أحد مجتمعات إيمدج للتطوير العقاري")
+  aboutHeroCtaLabelEn        String?             @default("Explore Our Journey")
+  aboutHeroCtaLabelAr        String?             @default("اكتشف رحلتنا")
+  aboutHeroCtaUrl            String?             @default("#about")
 
   aboutWhoWeAreEnabled       Boolean             @default(true)
   aboutWhoWeAreEyebrowEn     String              @default("Who We Are")
@@ -303,6 +312,24 @@ model Homepage {
   teamTitleAr            String              @default("منظورات مختلفة. رؤية واحدة.")
   teamIntroEn            String              @default("Meet the people shaping thoughtful places for how Egypt lives next.")
   teamIntroAr            String              @default("تعرف على الأشخاص الذين يصنعون أماكن مدروسة لمستقبل الحياة في مصر.")
+  teamHeroEnabled        Boolean             @default(true)
+  teamHeroCtaLabelEn     String?
+  teamHeroCtaLabelAr     String?
+  teamHeroCtaUrl         String?             @default("#team-roster")
+  teamHeroImageUrl       String?
+  teamHeroMobileImageUrl String?
+  teamHeroMediaType      String              @default("IMAGE")
+  teamHeroVideoUrl       String?
+  teamHeroMobileMediaType String             @default("INHERIT")
+  teamHeroMobileVideoUrl String?
+  teamHeroPosterUrl      String?
+  teamHeroFocalPoint     String              @default("center")
+  teamHeroMobileFocalPoint String            @default("center")
+  teamHeroImageAltEn     String?
+  teamHeroImageAltAr     String?
+  teamHeroOverlay        String              @default("medium")
+  teamHeroAlignment      String              @default("start")
+  teamHeroHeight         String              @default("standard")
   teamMembers            TeamMember[]
   partnersEyebrowEn      String              @default("Our partners")
   partnersEyebrowAr      String              @default("شركاؤنا")
@@ -310,14 +337,49 @@ model Homepage {
   partnersTitleAr        String              @default("نبني معاً. لنصنع أثراً يدوم.")
   partnersIntroEn        String              @default("We collaborate with leading minds across design, construction and hospitality to create places with lasting value.")
   partnersIntroAr        String              @default("نتعاون مع نخبة من الخبراء في التصميم والإنشاء والضيافة لنصنع أماكن ذات قيمة دائمة.")
+  partnersHeroEnabled        Boolean             @default(true)
+  partnersHeroCtaLabelEn     String?
+  partnersHeroCtaLabelAr     String?
+  partnersHeroCtaUrl         String?             @default("#partners-directory")
+  partnersHeroImageUrl       String?
+  partnersHeroMobileImageUrl String?
+  partnersHeroMediaType      String              @default("IMAGE")
+  partnersHeroVideoUrl       String?
+  partnersHeroMobileMediaType String             @default("INHERIT")
+  partnersHeroMobileVideoUrl String?
+  partnersHeroPosterUrl      String?
+  partnersHeroFocalPoint     String              @default("center")
+  partnersHeroMobileFocalPoint String            @default("center")
+  partnersHeroImageAltEn     String?
+  partnersHeroImageAltAr     String?
+  partnersHeroOverlay        String              @default("medium")
+  partnersHeroAlignment      String              @default("start")
+  partnersHeroHeight         String              @default("standard")
   partners               Partner[]
+  careersHeroEnabled     Boolean             @default(true)
   careersHeroEyebrowEn   String              @default("Careers at Image")
   careersHeroEyebrowAr   String              @default("انضم إلى فريقنا")
   careersHeroTitleEn     String              @default("Shape places that shape tomorrow.")
   careersHeroTitleAr     String              @default("اصنع مستقبلاً يحمل بصمتك.")
   careersHeroIntroEn     String              @default("At Image Developments, we bring together passionate professionals across architecture, engineering, and development to create places with lasting value.")
   careersHeroIntroAr     String              @default("في إيمدج للتطوير العقاري، نبحث دائماً عن العقول المبدعة والمهارات المتفردة لنبني معاً مجتمعات استثنائية.")
+  careersHeroCtaLabelEn  String?             @default("Explore Opportunities")
+  careersHeroCtaLabelAr  String?             @default("استكشف الفرص المتاحة")
+  careersHeroCtaUrl      String?             @default("#open-positions")
   careersHeroImageUrl    String?
+  careersHeroMobileImageUrl String?
+  careersHeroMediaType   String              @default("IMAGE")
+  careersHeroVideoUrl    String?
+  careersHeroMobileMediaType String          @default("INHERIT")
+  careersHeroMobileVideoUrl String?
+  careersHeroPosterUrl   String?
+  careersHeroFocalPoint  String              @default("center")
+  careersHeroMobileFocalPoint String         @default("center")
+  careersHeroImageAltEn  String?             @default("Careers at Image Developments")
+  careersHeroImageAltAr  String?             @default("الفرص الوظيفية في إيمدج للتطوير العقاري")
+  careersHeroOverlay     String              @default("medium")
+  careersHeroAlignment   String              @default("start")
+  careersHeroHeight      String              @default("standard")
   careersLifeEyebrowEn   String              @default("Life at Image")
   careersLifeEyebrowAr   String              @default("الحياة في إيمدج")
   careersLifeTitleEn     String              @default("An inspiring culture built on craft, collaboration, and growth.")
@@ -806,7 +868,7 @@ model GlobalSettings {
   callbackLabelEn         String?      @default("Request a Call Back")
   callbackLabelAr         String?      @default("طلب معاودة الاتصال")
   notificationEmailEnabled   Boolean   @default(true)
-  notificationRecipientEmail String?   @default("info@imagedevelopments.com")
+  notificationRecipientEmail String?   @default("info@image-developments.com")
   careersRecipientEmail      String?
   notificationSenderEmail    String?
   notificationSenderName     String?   @default("Image Developments")
@@ -977,14 +1039,32 @@ model TermsSection {
 }
 
 model ContactPage {
-  id            String   @id @default("contactpage")
-  heroEyebrowEn String   @default("Contact us")
-  heroEyebrowAr String   @default("تواصل معنا")
-  heroTitleEn   String   @default("Start a conversation.")
-  heroTitleAr   String   @default("ابدأ حواراً معنا.")
-  heroBodyEn    String   @default("Tell us how we can help and our team will get back to you.")
-  heroBodyAr    String   @default("أخبرنا كيف يمكننا مساعدتك وسيتواصل معك فريقنا.")
-  updatedAt     DateTime @default(now()) @updatedAt
+  id                     String   @id @default("contactpage")
+  heroEnabled            Boolean  @default(true)
+  heroEyebrowEn          String   @default("Contact us")
+  heroEyebrowAr          String   @default("تواصل معنا")
+  heroTitleEn            String   @default("Start a conversation.")
+  heroTitleAr            String   @default("ابدأ حواراً معنا.")
+  heroBodyEn             String   @default("Tell us how we can help and our team will get back to you.")
+  heroBodyAr             String   @default("أخبرنا كيف يمكننا مساعدتك وسيتواصل معك فريقنا.")
+  heroCtaLabelEn         String?  @default("Send an Inquiry")
+  heroCtaLabelAr         String?  @default("أرسل استفسارك")
+  heroCtaUrl             String?  @default("#contact-form")
+  heroImageUrl           String?
+  heroMobileImageUrl     String?
+  heroMediaType          String   @default("IMAGE")
+  heroVideoUrl           String?
+  heroMobileMediaType    String   @default("INHERIT")
+  heroMobileVideoUrl     String?
+  heroPosterUrl          String?
+  heroFocalPoint         String   @default("center")
+  heroMobileFocalPoint   String   @default("center")
+  heroImageAltEn         String?
+  heroImageAltAr         String?
+  heroOverlay            String   @default("medium")
+  heroAlignment          String   @default("start")
+  heroHeight             String   @default("standard")
+  updatedAt              DateTime @default(now()) @updatedAt
 }
 
 model ContactSubmission {

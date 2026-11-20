@@ -180,11 +180,12 @@ export function LifestyleStoryImagesEditor({
         onChange={handleFileChange}
       />
 
-      {/* 2x2 Grid of image slots */}
+      {/* 2x2 Balanced Grid of image slots */}
       <div
+        className="lifestyle-slots-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
           gap: "20px",
         }}
       >
@@ -198,11 +199,12 @@ export function LifestyleStoryImagesEditor({
               style={{
                 backgroundColor: "#faf9f6",
                 border: "1px solid var(--line, #dfe4dc)",
-                borderRadius: "8px",
+                borderRadius: "10px",
                 padding: "16px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "12px",
+                boxShadow: "var(--shadow-sm)",
               }}
             >
               {/* Slot Header */}
@@ -240,7 +242,7 @@ export function LifestyleStoryImagesEditor({
                   position: "relative",
                   width: "100%",
                   height: "170px",
-                  backgroundColor: "#e5e3dc",
+                  backgroundColor: "#f4f5f2",
                   borderRadius: "6px",
                   overflow: "hidden",
                   border: "1px solid var(--line, #dfe4dc)",
@@ -255,7 +257,7 @@ export function LifestyleStoryImagesEditor({
                     alt={slot.imageAltEn || slot.labelEn}
                     fill
                     sizes="340px"
-                    style={{ objectFit: "cover", objectPosition: slot.focalPoint || "center" }}
+                    style={{ objectFit: "contain", objectPosition: slot.focalPoint || "center" }}
                   />
                 ) : (
                   <div style={{ textAlign: "center", color: "#888", fontSize: "12px" }}>
