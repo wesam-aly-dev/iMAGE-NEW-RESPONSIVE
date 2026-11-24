@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
@@ -42,9 +42,22 @@ export function PageHero({
   quickBadges,
 }: PageHeroProps) {
   const ref = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const reduce = useReducedMotion();
   const ar = locale === "ar";
   const homeHref = `/${locale}`;
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [failedVideoSource, setFailedVideoSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const scale = useTransform(scrollYProgress, [0, 1], [1, reduce ? 1 : 1.08]);
@@ -77,18 +90,78 @@ export function PageHero({
   const desktopImage = hero.image || hero.mobileImage;
   const posterImage = hero.posterUrl || desktopImage;
 
-  const mobileMode = hero.mobileMediaType || (hero.mobileVideoUrl ? "VIDEO" : hero.mobileImage && hero.mobileImage !== hero.image ? "IMAGE" : "INHERIT");
-  const mobileIsVideo = (mobileMode === "VIDEO" && Boolean(hero.mobileVideoUrl)) || Boolean(!desktopIsVideo && hero.mobileVideoUrl);
-  const mobileIsImage = (mobileMode === "IMAGE" && Boolean(hero.mobileImage)) || (desktopIsVideo && Boolean(hero.mobileImage)) || Boolean(hero.mobileImage && hero.mobileImage !== hero.image);
+  const mobileMode =
+    hero.mobileMediaType ||
+    (hero.mobileVideoUrl
+      ? "VIDEO"
+      : hero.mobileImage && hero.mobileImage !== hero.image
+      ? "IMAGE"
+      : "INHERIT");
+  const mobileIsVideo =
+    (mobileMode === "VIDEO" && Boolean(hero.mobileVideoUrl)) ||
+    Boolean(!desktopIsVideo && hero.mobileVideoUrl);
+  const mobileIsImage =
+    (mobileMode === "IMAGE" && Boolean(hero.mobileImage)) ||
+    (desktopIsVideo && Boolean(hero.mobileImage)) ||
+    Boolean(hero.mobileImage && hero.mobileImage !== hero.image);
   const hasMobileOverride = Boolean(mobileIsVideo || mobileIsImage);
 
   const mobileVideo = hero.mobileVideoUrl || desktopVideo;
   const mobileImage = hero.mobileImage;
 
+  // Determine active media for current viewport to prevent dual video playback
+  const activeIsVideo = isMobile
+    ? mobileIsVideo && Boolean(mobileVideo)
+    : desktopIsVideo && Boolean(desktopVideo);
+
+  const activeVideoUrl = isMobile ? mobileVideo : desktopVideo;
+  const activeImageUrl = isMobile && mobileIsImage ? mobileImage : desktopImage;
+  const activeFocalPoint =
+    (isMobile ? hero.mobileFocalPoint || hero.focalPoint : hero.focalPoint) || "center";
+
   const hasMedia = Boolean(desktopImage || desktopVideo || mobileImage || mobileVideo);
 
+  // Background Autoplay execution with promise error catch
+  useEffect(() => {
+    if (!activeIsVideo || !activeVideoUrl || failedVideoSource === activeVideoUrl) return;
+    const video = videoRef.current;
+    if (!video || reduce) return;
+
+    video.defaultMuted = true;
+    video.muted = true;
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => setVideoPlaying(true))
+        .catch(() => {
+          // Autoplay policy or low-power mode blocked playback
+          setVideoPlaying(false);
+        });
+    }
+  }, [activeIsVideo, activeVideoUrl, reduce, failedVideoSource]);
+
+  const toggleVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setVideoPlaying(true))
+          .catch(() => setVideoPlaying(false));
+      }
+    } else {
+      video.pause();
+      setVideoPlaying(false);
+    }
+  };
+
   const isDuplicateEyebrow = Boolean(
-    hero.eyebrow && hero.eyebrow.trim().toLowerCase() === breadcrumbLabel.trim().toLowerCase()
+    hero.eyebrow &&
+      breadcrumbLabel &&
+      (hero.eyebrow.trim().toLowerCase() === breadcrumbLabel.trim().toLowerCase() ||
+        hero.eyebrow.trim().toLowerCase().replace(/\s+/g, "") ===
+          breadcrumbLabel.trim().toLowerCase().replace(/\s+/g, ""))
   );
 
   const handleCtaClick = (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
@@ -97,7 +170,13 @@ export function PageHero({
       e.preventDefault();
       const el = document.querySelector(target);
       if (el) {
-        const lenis = (window as unknown as { lenis?: { scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void } }).lenis;
+        const lenis = (
+          window as unknown as {
+            lenis?: {
+              scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void;
+            };
+          }
+        ).lenis;
         if (lenis) {
           lenis.scrollTo(target, { duration: 1.2 });
         } else {
@@ -112,7 +191,13 @@ export function PageHero({
     if (target && target.startsWith("#")) {
       const el = document.querySelector(target);
       if (el) {
-        const lenis = (window as unknown as { lenis?: { scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void } }).lenis;
+        const lenis = (
+          window as unknown as {
+            lenis?: {
+              scrollTo: (target: string | HTMLElement, opts?: { offset?: number; duration?: number }) => void;
+            };
+          }
+        ).lenis;
         if (lenis) {
           lenis.scrollTo(target, { duration: 1.2 });
         } else {
@@ -123,6 +208,9 @@ export function PageHero({
       window.location.href = target;
     }
   };
+
+  const isVideoRenderable =
+    activeIsVideo && Boolean(activeVideoUrl) && failedVideoSource !== activeVideoUrl;
 
   return (
     <header
@@ -136,25 +224,66 @@ export function PageHero({
       {hasMedia ? (
         <motion.div className="page-hero-media" style={{ scale }}>
           <div className="page-hero-bg-motion">
-            {/* Desktop Media: Video or Image (Universal if no mobile override) */}
-            {desktopIsVideo && desktopVideo ? (
+            {/* Desktop Media: Video or Image */}
+            {isVideoRenderable ? (
               <div
-                className={`page-hero-video-desktop ${!hasMobileOverride ? "is-universal" : ""}`}
+                className={`page-hero-video-active page-hero-video-desktop ${!hasMobileOverride ? "is-universal" : ""}`}
                 aria-hidden={hasMobileOverride ? undefined : "false"}
               >
                 <video
-                  src={desktopVideo}
+                  ref={videoRef}
+                  key={activeVideoUrl}
+                  src={activeVideoUrl}
                   poster={posterImage || undefined}
                   autoPlay={!reduce}
                   muted
                   loop
                   playsInline
                   preload="auto"
+                  onError={() => {
+                    setFailedVideoSource(activeVideoUrl || null);
+                    setVideoPlaying(false);
+                  }}
+                  onPlay={() => setVideoPlaying(true)}
+                  onPause={() => setVideoPlaying(false)}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: activeFocalPoint,
+                  }}
                 />
+
+                {/* Poster fallback overlay when video is paused or buffering */}
+                {!videoPlaying && posterImage && (
+                  <div
+                    className="page-hero-video-poster"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <Image
+                      src={posterImage}
+                      alt={hero.alt || hero.title}
+                      fill
+                      priority
+                      sizes="100vw"
+                      quality={90}
+                      style={{
+                        objectFit: "cover",
+                        objectPosition: activeFocalPoint,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ) : desktopImage ? (
               <div
-                className={`page-hero-img-desktop ${!hasMobileOverride ? "is-universal" : ""}`}
+                className={`page-hero-img-active page-hero-img-desktop ${!hasMobileOverride ? "is-universal" : ""}`}
                 aria-hidden={hasMobileOverride ? undefined : "false"}
               >
                 <Image
@@ -184,6 +313,14 @@ export function PageHero({
                     loop
                     playsInline
                     preload="auto"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: hero.mobileFocalPoint || hero.focalPoint || "center",
+                    }}
                   />
                 </div>
               ) : mobileImage ? (
@@ -308,6 +445,23 @@ export function PageHero({
           )}
         </div>
       </motion.div>
+
+      {/* WCAG 2.2.2 Pause/Play Background Video Toggle Button */}
+      {isVideoRenderable && (
+        <button
+          type="button"
+          className="hero-video-toggle"
+          onClick={toggleVideo}
+          aria-label={
+            videoPlaying
+              ? (ar ? "إيقاف مؤقت لخلفية الفيديو" : "Pause background video")
+              : (ar ? "تشغيل خلفية الفيديو" : "Play background video")
+          }
+          title={videoPlaying ? (ar ? "إيقاف مؤقت" : "Pause") : (ar ? "تشغيل" : "Play")}
+        >
+          <span aria-hidden="true">{videoPlaying ? "❚❚" : "▶"}</span>
+        </button>
+      )}
 
       {/* Signature Double Chevron Scroll Cue */}
       <button

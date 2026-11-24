@@ -20,11 +20,24 @@ import { useEnquiryModal } from "./enquiry-provider";
    ========================================================================== */
 function AboutHero({ copy }: { copy: AboutPageContent }) {
   const ref = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const ar = copy.locale === "ar";
   const homeHref = `/${copy.locale}`;
   const reduce = useReducedMotion();
   const hero = copy.aboutPage.hero;
   const { isInitialCinematic, introPhase } = usePageTransition();
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [failedVideoSource, setFailedVideoSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const scale = useTransform(scrollYProgress, [0, 1], [1, reduce ? 1 : 1.08]);
@@ -66,6 +79,57 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
   const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
   const ctaLabel = hero.ctaLabel || (ar ? "اكتشف رحلتنا" : "Explore Our Journey");
 
+  const desktopIsVideo = hero.mediaType === "VIDEO" && Boolean(hero.videoUrl);
+  const desktopVideo = hero.videoUrl;
+  const desktopImage = hero.image || hero.mobileImage;
+  const posterImage = hero.posterUrl || desktopImage;
+
+  const mobileMode = hero.mobileMediaType || (hero.mobileVideoUrl ? "VIDEO" : hero.mobileImage && hero.mobileImage !== hero.image ? "IMAGE" : "INHERIT");
+  const mobileIsVideo = (mobileMode === "VIDEO" && Boolean(hero.mobileVideoUrl)) || Boolean(!desktopIsVideo && hero.mobileVideoUrl);
+  const mobileIsImage = (mobileMode === "IMAGE" && Boolean(hero.mobileImage)) || (desktopIsVideo && Boolean(hero.mobileImage)) || Boolean(hero.mobileImage && hero.mobileImage !== hero.image);
+
+  const mobileVideo = hero.mobileVideoUrl || desktopVideo;
+  const mobileImage = hero.mobileImage;
+
+  const activeIsVideo = isMobile ? (mobileIsVideo && Boolean(mobileVideo)) : (desktopIsVideo && Boolean(desktopVideo));
+  const activeVideoUrl = isMobile ? mobileVideo : desktopVideo;
+  const activeImageUrl = isMobile && mobileIsImage ? mobileImage : desktopImage;
+  const activeFocalPoint = (isMobile ? (hero.mobileFocalPoint || hero.focalPoint) : hero.focalPoint) || "center";
+
+  // Autoplay video with catch
+  useEffect(() => {
+    if (!activeIsVideo || !activeVideoUrl || failedVideoSource === activeVideoUrl) return;
+    const video = videoRef.current;
+    if (!video || reduce) return;
+
+    video.defaultMuted = true;
+    video.muted = true;
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => setVideoPlaying(true))
+        .catch(() => setVideoPlaying(false));
+    }
+  }, [activeIsVideo, activeVideoUrl, reduce, failedVideoSource]);
+
+  const toggleVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setVideoPlaying(true))
+          .catch(() => setVideoPlaying(false));
+      }
+    } else {
+      video.pause();
+      setVideoPlaying(false);
+    }
+  };
+
+  const isVideoRenderable = activeIsVideo && Boolean(activeVideoUrl) && failedVideoSource !== activeVideoUrl;
+
   return (
     <header id="top" ref={ref} className="about-hero" role="banner" aria-label={hero.title}>
       {/* Background Architectural Imagery with Subtle Scale */}
@@ -76,40 +140,56 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
           animate={{ scale: 1.0 }}
           transition={{ duration: animateEntrance ? 1.6 : 0, delay: animateEntrance ? 0.1 : 0, ease }}
         >
-          {hero.mobileImage ? (
-            <>
-              <div className="about-hero-img-desktop" aria-hidden="false">
-                <Image
-                  src={hero.image || hero.mobileImage}
-                  alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
-                  fill
-                  priority
-                  sizes="100vw"
-                  quality={90}
-                  style={{ objectFit: "cover", objectPosition: hero.focalPoint || "center" }}
-                />
-              </div>
-              <div className="about-hero-img-mobile" aria-hidden="false">
-                <Image
-                  src={hero.mobileImage}
-                  alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
-                  fill
-                  priority
-                  sizes="100vw"
-                  quality={90}
-                  style={{ objectFit: "cover", objectPosition: hero.mobileFocalPoint || hero.focalPoint || "center" }}
-                />
-              </div>
-            </>
-          ) : hero.image ? (
+          {isVideoRenderable ? (
+            <div className="about-hero-video-wrap" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+              <video
+                ref={videoRef}
+                key={activeVideoUrl}
+                src={activeVideoUrl}
+                poster={posterImage || undefined}
+                autoPlay={!reduce}
+                muted
+                loop
+                playsInline
+                preload="auto"
+                onError={() => {
+                  setFailedVideoSource(activeVideoUrl || null);
+                  setVideoPlaying(false);
+                }}
+                onPlay={() => setVideoPlaying(true)}
+                onPause={() => setVideoPlaying(false)}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: activeFocalPoint,
+                }}
+              />
+              {!videoPlaying && posterImage && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                  <Image
+                    src={posterImage}
+                    alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
+                    fill
+                    priority
+                    sizes="100vw"
+                    quality={90}
+                    style={{ objectFit: "cover", objectPosition: activeFocalPoint }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : activeImageUrl ? (
             <Image
-              src={hero.image}
+              src={activeImageUrl}
               alt={hero.alt || (ar ? "عن إيمدج للتطوير العقاري" : "About Image Developments")}
               fill
               priority
               sizes="100vw"
               quality={90}
-              style={{ objectFit: "cover", objectPosition: hero.focalPoint || "center" }}
+              style={{ objectFit: "cover", objectPosition: activeFocalPoint }}
             />
           ) : null}
         </motion.div>
@@ -117,6 +197,23 @@ function AboutHero({ copy }: { copy: AboutPageContent }) {
 
       {/* Directional Architectural Darkening for Optimum Legibility */}
       <div className="about-hero-shade" aria-hidden="true" />
+
+      {/* WCAG 2.2.2 Pause/Play Background Video Toggle Button */}
+      {isVideoRenderable && (
+        <button
+          type="button"
+          className="hero-video-toggle"
+          onClick={toggleVideo}
+          aria-label={
+            videoPlaying
+              ? (ar ? "إيقاف مؤقت لخلفية الفيديو" : "Pause background video")
+              : (ar ? "تشغيل خلفية الفيديو" : "Play background video")
+          }
+          title={videoPlaying ? (ar ? "إيقاف مؤقت" : "Pause") : (ar ? "تشغيل" : "Play")}
+        >
+          <span aria-hidden="true">{videoPlaying ? "❚❚" : "▶"}</span>
+        </button>
+      )}
 
       {/* Main Hero Copy Container */}
       <motion.div className="about-hero-copy stage-pad" style={{ y: copyY, opacity: copyOpacity }}>

@@ -339,6 +339,7 @@ export type ProjectDetailData = {
   directionsUrl?: string;
   mobileHeroImageUrl?: string;
   heroVideoUrl?: string;
+  heroVideoPosterUrl?: string;
   cardImageUrl?: string;
   heroTitle?: string;
   heroDescription?: string;

@@ -818,6 +818,7 @@ export const getProjectDetailContent = cache(async (locale: Locale, slug: string
       coverImageAlt: pick(locale, project.coverImageAltEn, project.coverImageAltAr),
       mobileHeroImageUrl: project.mobileHeroImageUrl ?? undefined,
       heroVideoUrl: project.heroVideoUrl ?? undefined,
+      heroVideoPosterUrl: project.heroVideoPosterUrl ?? undefined,
       cardImageUrl: project.cardImageUrl ?? undefined,
       gallery: galleryUrls,
       galleryItems,

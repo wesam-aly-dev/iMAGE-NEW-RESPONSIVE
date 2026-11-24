@@ -1798,7 +1798,7 @@ export async function saveProject(_: ActionState, f: FormData): Promise<ActionSt
     ogImageUrl: str(f, "ogImageUrl") || null,
   };
 
-  const id = str(f, "id");
+  const id = str(f, "id") || str(f, "projectId");
   let savedId = id;
 
   try {

@@ -1076,21 +1076,41 @@ export function ProjectEditor({ item, assets }: ProjectEditorProps) {
               posterName="heroVideoPosterUrl"
               posterValue={formData.heroVideoPosterUrl}
               existingAssets={assets}
-              helpText="Ambient looping video background for the project detail hero."
+              helpText="Ambient looping video background for the project detail hero. Autoplays muted with smooth poster fallback."
               onChange={(url) => handleFieldChange("heroVideoUrl", url)}
             />
 
-            <div className="bilingual">
+            {/* Dedicated Project Identity & Brand Logo Section */}
+            <div
+              style={{
+                marginTop: "24px",
+                padding: "20px",
+                background: "#f8faf8",
+                border: "1px solid var(--line, #dfe4dc)",
+                borderRadius: "10px",
+              }}
+            >
+              <div style={{ marginBottom: "12px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: 700, margin: "0 0 4px", color: "var(--foreground)" }}>
+                  Project Emblem &amp; Brand Logo / شعار وهوية المشروع
+                </h3>
+                <p className="hint" style={{ fontSize: "12px", color: "var(--muted, #6b7280)", margin: 0 }}>
+                  Dedicated visual identity for this project. Displayed prominently above the project title in the hero with authentic colors and transparency preserved. Changing or removing this logo affects only this project.
+                </p>
+              </div>
+
               <MediaUploadField
                 name="logoUrl"
-                label="Project Emblem / Logo (Optional)"
+                label="Project Logo Asset (Transparent PNG / SVG / WebP)"
                 value={formData.logoUrl}
                 kind="IMAGE"
                 existingAssets={assets}
-                helpText="Transparent PNG or SVG mark displayed beside the project title."
+                helpText="Full-fidelity logo mark. Sized responsively and rendered without color distortion."
                 onChange={(url) => handleFieldChange("logoUrl", url)}
               />
+            </div>
 
+            <div style={{ marginTop: "20px" }}>
               <MediaUploadField
                 name="cardImageUrl"
                 label="Portfolio Card Image (Optional override)"

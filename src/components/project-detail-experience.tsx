@@ -43,6 +43,37 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Ambient Hero Background Video Controller
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const [heroVideoPlaying, setHeroVideoPlaying] = useState(false);
+  const [failedHeroVideo, setFailedHeroVideo] = useState(false);
+
+  useEffect(() => {
+    if (!project.heroVideoUrl || failedHeroVideo) return;
+    const v = heroVideoRef.current;
+    if (!v) return;
+    v.defaultMuted = true;
+    v.muted = true;
+    const p = v.play();
+    if (p !== undefined) {
+      p.then(() => setHeroVideoPlaying(true)).catch(() => setHeroVideoPlaying(false));
+    }
+  }, [project.heroVideoUrl, failedHeroVideo]);
+
+  const toggleHeroVideo = () => {
+    const v = heroVideoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      const p = v.play();
+      if (p !== undefined) {
+        p.then(() => setHeroVideoPlaying(true)).catch(() => setHeroVideoPlaying(false));
+      }
+    } else {
+      v.pause();
+      setHeroVideoPlaying(false);
+    }
+  };
+
   const handleOpenProjectEnquiry = (unitName?: string) => {
     openEnquiry({
       projectId: project.id,
@@ -118,15 +149,55 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
         ========================================================= */}
         <section className="project-hero" aria-label={project.name}>
           <div className="project-hero-media">
-            <Image
-              src={project.coverImageUrl}
-              alt={project.coverImageAlt || project.name}
-              fill
-              priority
-              sizes="100vw"
-              quality={90}
-              className="project-hero-bg-img"
-            />
+            {project.heroVideoUrl && !failedHeroVideo ? (
+              <div className="project-hero-video-wrap" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+                <video
+                  ref={heroVideoRef}
+                  src={project.heroVideoUrl}
+                  poster={project.heroVideoPosterUrl || project.coverImageUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  className="project-hero-bg-video"
+                  onError={() => {
+                    setFailedHeroVideo(true);
+                    setHeroVideoPlaying(false);
+                  }}
+                  onPlay={() => setHeroVideoPlaying(true)}
+                  onPause={() => setHeroVideoPlaying(false)}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+                {!heroVideoPlaying && (
+                  <Image
+                    src={project.heroVideoPosterUrl || project.coverImageUrl}
+                    alt={project.coverImageAlt || project.name}
+                    fill
+                    priority
+                    sizes="100vw"
+                    quality={90}
+                    className="project-hero-bg-img"
+                  />
+                )}
+              </div>
+            ) : (
+              <Image
+                src={project.coverImageUrl}
+                alt={project.coverImageAlt || project.name}
+                fill
+                priority
+                sizes="100vw"
+                quality={90}
+                className="project-hero-bg-img"
+              />
+            )}
             <div className="project-hero-wash" />
           </div>
 
@@ -153,14 +224,18 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
 
             {/* Title & Brand Identity */}
             <div className="project-hero-main">
-              <div className="project-hero-title-row">
-                {project.logoUrl && (
-                  <div className="project-hero-logo" aria-hidden="true">
-                    <Image src={project.logoUrl} alt={project.name} fill style={{ objectFit: "contain" }} sizes="52px" />
-                  </div>
-                )}
-                <h1 className="project-hero-title">{project.name}</h1>
-              </div>
+              {project.logoUrl && (
+                <div className="project-hero-brand-emblem" aria-label={`${project.name} logo`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={project.logoUrl}
+                    alt={`${project.name} logo`}
+                    className="project-hero-logo-img"
+                    loading="eager"
+                  />
+                </div>
+              )}
+              <h1 className="project-hero-title">{project.name}</h1>
 
               {project.shortDescription && (
                 <p className="project-hero-deck">{project.shortDescription}</p>
@@ -224,6 +299,23 @@ export function ProjectDetailExperience({ copy }: { copy: ProjectDetailPageConte
               </button>
             </div>
           </div>
+
+          {/* WCAG 2.2.2 Pause/Play Background Video Toggle Button */}
+          {project.heroVideoUrl && !failedHeroVideo && (
+            <button
+              type="button"
+              className="hero-video-toggle"
+              onClick={toggleHeroVideo}
+              aria-label={
+                heroVideoPlaying
+                  ? (ar ? "إيقاف مؤقت لخلفية الفيديو" : "Pause background video")
+                  : (ar ? "تشغيل خلفية الفيديو" : "Play background video")
+              }
+              title={heroVideoPlaying ? (ar ? "إيقاف مؤقت" : "Pause") : (ar ? "تشغيل" : "Play")}
+            >
+              <span aria-hidden="true">{heroVideoPlaying ? "❚❚" : "▶"}</span>
+            </button>
+          )}
         </section>
 
         {/* =========================================================
